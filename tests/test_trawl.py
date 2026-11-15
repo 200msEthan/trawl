@@ -529,6 +529,35 @@ def test_playground_page_is_up_to_date():
     assert r.returncode == 0, r.stderr
 
 
+def test_playground_196_curse_catches_and_now_at():
+    # the playground shows every printed line that starts with a number as a catch, and "now at"
+    # shows the number at the bottom of the stack while a hunt runs (playground/template.html)
+    from trawl.interp import Sea
+    src = (ROOT / "playground" / "examples" / "curse.trawl").read_text(encoding="utf-8")
+
+    class Watch(Sea):
+        bottoms = set()
+
+        def exec(self, body):
+            if self.stack:
+                self.bottoms.add(self.stack[0])
+            return Sea.exec(self, body)
+
+    sea = Watch()
+    lines = sea.run(parse(src)).splitlines()
+    catches = [ln for ln in lines if re.match(r"^\s*(?:[A-Za-z]\w{0,3} = )?(-?\d+)", ln)]
+    # the 13 known Lychrel candidates below 1000 (OEIS A023108), then the toughest escape (89, 24 flips)
+    assert [int(c.split()[0]) for c in catches] == [196, 295, 394, 493, 592, 689, 691, 788, 790, 879, 887, 978, 986, 89, 2]
+    # copycats: only 196 and 879 start their own family below 1000 (Lychrel seeds, OEIS A063048)
+    assert [c.split()[0] for c in catches if "new family" in c] == ["196", "879"]
+    assert "978 is cursed, a copycat of 879 " in lines
+    assert lines[-3] == "89 broke free after 24 flips: the toughest escape"
+    assert lines[-2] == "2 cursed families, started by: 196 879 "
+    assert lines[-1] == "Tested every number up to 1000 and found 13 cursed numbers: those families and their copycats"
+    # "now at" must show the number being tested, never the huge number it grows into
+    assert max(sea.bottoms) <= 1001
+
+
 # ---------------------------------------------------------------- receipts
 
 def trawl_cli(*args, cwd=None):
