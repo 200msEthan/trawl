@@ -1,0 +1,9 @@
+# Claude #2b: THE ECHO CHAIN. Each new number = how many steps ago the current number last appeared;
+# if the current number is brand new, the next number is HALF of it (rounded down) instead. Starts at 0.
+# v at 800, step k at 801, last-seen of value x at 200000 + x (0 = never).
+use stdlib
+: last 200000 + dig ;
+: step 800 dig last 802 bury 801 dig 800 dig 200000 + bury 802 dig 0 = if 803 dig 1 + 803 bury 800 dig 2 / else 801 dig 802 dig - then dup 804 dig max 804 bury 800 bury 801 dig 1 + 801 bury ;
+: start 0 800 bury 1 801 bury 0 803 bury 0 804 bury ;
+: missing 0 [ dup last 0 = if 0 else 1 + then ] drop ;
+: hole 0 1 [ drop dup last 0 = if 0 else 1 + 1 then ] drop ;

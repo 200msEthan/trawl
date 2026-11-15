@@ -1,0 +1,18 @@
+# Claude #2: what does ring 29 look like once it is inside its short 1983-year loop?
+# Rule M2: each spot becomes left + right + (itself x what it was last year), remainder after 3.
+# Current reef at 1001.., last year's reef right after it, so `echo` can watch both at once.
+: n 29 ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow dup c over o * over left c + over right c + 3 % swap 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: years 501 dig ;
+: show 1 [ dup c dup 0 = if drop 32 else 1 = if 46 else 35 then then emit 1 + dup n > if drop 0 then ] drop 124 emit 10 emit ;
+# ring 29 enters its 1983-year loop around year 91793: fast-forward, then draw 24 years of the loop
+1 1001 bury
+91800 [ each-grow each-shift 1 - ] drop
+24 [ show each-grow each-shift 1 - ] drop

@@ -1,0 +1,21 @@
+use stdlib
+: D 900001 dig ;
+: K 900002 dig ;
+: TOT 900003 dig ;
+: CM 900004 dig ;
+: M 900005 dig ;
+: f dup K power + D % ;
+: land 3 D * [ swap f swap 1 - ] drop ;
+: cyclemin dup 900010 bury dup f dup 900010 dig = 0 = [ drop swap over min swap f dup 900010 dig = 0 = ] drop drop ;
+: fixed? 900012 bury 900011 bury 900011 dig K power 900012 dig % 900013 bury 1 900012 dig D / 1 + [ dup 1 - D * 900011 dig + K power 900012 dig % 900013 dig = rot * swap 1 - ] drop ;
+: check-r dup 900014 dig fixed? rot * swap ;
+: cycle-ok 900014 bury 1 CM check-r f dup CM = 0 = [ drop check-r f dup CM = 0 = ] drop drop ;
+: best-M D 900005 bury D K power [ dup D K power swap % 0 = if dup D * cycle-ok if dup D * M max 900005 bury then then 1 - ] drop ;
+: add-r dup K power M % rot + swap ;
+: cycle-S 0 CM add-r f dup CM = 0 = [ drop add-r f dup CM = 0 = ] drop drop M % ;
+: count-cycle best-M cycle-S dup D % 0 = if D / M D / tuck % swap gcd else drop 1 then TOT + 900003 bury ;
+: try-r land cyclemin dup 800000 + dig if drop else dup 1 swap 800000 + bury 900004 bury count-cycle then ;
+: clear-seen D 1 + [ 0 over 799999 + bury 1 - ] drop ;
+: predict 900002 bury 1 - 900001 bury 0 900003 bury D 1 = if 1 else clear-seen D [ dup 1 - try-r 1 - ] drop TOT then ;
+3 [ dup 2 predict . 1 + dup 21 = if drop 0 then ] drop 10 emit
+10 3 predict . 7 3 predict . 5 3 predict . 3 4 predict . 4 4 predict . 5 4 predict . 2 2 predict . 10 emit

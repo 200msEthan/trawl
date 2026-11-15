@@ -1,0 +1,24 @@
+# Claude #2f: THE LAGGING TUCKER in Tide. Top card v becomes the w-th card (w = previous tucked card's value, cell 6), then w = v.
+# Each line deals a start deck + w, plays until the whole state comes back, prints n and the loop length. Python (tide6_lagtucker.py) says:
+#   1 2 3 4 5 w=1 -> loop 1
+#   2 3 4 5 1 w=5 -> loop 340
+#   3 1 4 2 5 6 w=2 -> loop 52
+#   6 5 4 3 2 1 w=1 -> loop 39
+#   2 7 1 6 3 5 4 w=3 -> loop 28870
+#   1 2 3 4 5 6 7 8 w=8 -> loop 201221
+#   8 1 7 2 6 3 5 4 w=4 -> loop 50604
+use stdlib
+: n 1 dig ;
+: card 10 + dig ;
+: setcard 10 + bury ;
+: lagtuck 1 card 5 bury 1 1 6 dig < [ drop dup 1 + card over setcard 1 + dup 6 dig < ] drop drop 5 dig 6 dig setcard 5 dig 6 bury ;
+: save 1 1 [ drop dup card over 30 + bury 1 + dup n > 0 = ] drop drop 6 dig 7 bury ;
+: diff 0 1 1 [ drop dup card over 30 + dig = 0 = rot + swap 1 + dup n > 0 = ] drop drop 6 dig 7 dig = 0 = + ;
+: loop 0 1 [ drop lagtuck 1 + diff ] drop ;
+5 1 bury 1 1 setcard 2 2 setcard 3 3 setcard 4 4 setcard 5 5 setcard 1 6 bury save loop n . . cr
+5 1 bury 2 1 setcard 3 2 setcard 4 3 setcard 5 4 setcard 1 5 setcard 5 6 bury save loop n . . cr
+6 1 bury 3 1 setcard 1 2 setcard 4 3 setcard 2 4 setcard 5 5 setcard 6 6 setcard 2 6 bury save loop n . . cr
+6 1 bury 6 1 setcard 5 2 setcard 4 3 setcard 3 4 setcard 2 5 setcard 1 6 setcard 1 6 bury save loop n . . cr
+7 1 bury 2 1 setcard 7 2 setcard 1 3 setcard 6 4 setcard 3 5 setcard 5 6 setcard 4 7 setcard 3 6 bury save loop n . . cr
+8 1 bury 1 1 setcard 2 2 setcard 3 3 setcard 4 4 setcard 5 5 setcard 6 6 setcard 7 7 setcard 8 8 setcard 8 6 bury save loop n . . cr
+8 1 bury 8 1 setcard 1 2 setcard 7 3 setcard 2 4 setcard 6 5 setcard 3 6 setcard 5 7 setcard 4 8 setcard 4 6 bury save loop n . . cr

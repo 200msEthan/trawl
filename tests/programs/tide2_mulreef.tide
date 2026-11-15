@@ -1,0 +1,15 @@
+# Claude #2b: THE MULTIPLYING REEF. Ring of n (600) spots holding 0..P-1 (603). Each year every spot becomes
+# left x right x (itself + 1), remainder after P. Random starts, loop length by echo.
+use stdlib
+: n 600 dig ;
+: P 603 dig ;
+: c 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow dup left c over right c * over c 1 + * P % swap 3000 + bury ;
+: year 1 [ dup grow 1 + dup n > if drop 0 then ] drop 1 [ dup 3000 + dig over 1000 + bury 1 + dup n > if drop 0 then ] drop ;
+: look 1001 1000 n + echo ;
+: CAP 602 dig ;
+: run look drop 0 501 bury 1 [ drop year 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / P % ;
+: roll 1 [ dice over 1000 + bury 1 + dup n > if drop 0 then ] drop ;

@@ -1,0 +1,3 @@
+: ds 0 swap [ dup 10 % rot + swap 10 / ] drop ;
+: step dup ds dup * + 110 % ;
+1 [ dup 300 [ swap step swap 1 - ] drop . 1 + dup 110 = if drop 0 then ]

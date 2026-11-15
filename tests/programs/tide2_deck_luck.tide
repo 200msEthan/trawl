@@ -1,0 +1,5 @@
+# Claude #2b: the deck with K = n - 1 kinds (every load has its own place, the biggest goes to the back).
+# 8 random decks per length, loop length each (0 = none within 30000 turns).
+use tide2_deck
+30000 602 bury
+3 [ dup 600 bury dup 1 - 603 bury ." boats " dup . ." : " 1 [ dup 700 bury wipe hush roll sail . 1 + dup 8 > if drop 0 then ] drop 10 emit 1 + dup 16 > if drop 0 then ] drop

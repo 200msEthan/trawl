@@ -1,0 +1,4 @@
+: next dup * 31 % ;
+: clear-bed 31 [ 0 over bury 1 - ] drop ;
+: cycle clear-bed 1 swap [ dup dig dup if rot swap - swap drop 0 else drop over over bury swap 1 + swap next then ] drop ;
+1 [ dup . ." loops every " dup cycle . 10 emit 1 + dup 31 = if drop 0 then ]

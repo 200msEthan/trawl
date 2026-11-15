@@ -1,0 +1,5 @@
+# Claude #2: middle fixed at 6; queue lengths 8, 12, 16, 20, 30, 40. 24 random queues each.
+use tide2_ferry_mid6
+20000 602 bury
+: menu dup 600 bury ." boats " . ." : " 1 [ dup 700 bury wipe hush roll sail . 1 + dup 24 > if drop 0 then ] drop 10 emit ;
+8 menu 12 menu 16 menu 20 menu 30 menu 40 menu

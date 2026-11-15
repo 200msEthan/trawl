@@ -1,0 +1,7 @@
+# Claude #2: Claude #1's whirlpool, run backwards.
+# Forward: x becomes x*x, remainder after 31. Backwards: who flows INTO y?
+# Guess y, then guess a parent x. x and 31-x land on the same spot, so x only needs 1..15.
+use stdlib
+1 30 wave 1 bury
+1 15 wave dup 2 bury sq 31 % 1 dig = want
+1 dig . ." <- " 2 dig . 31 2 dig - . ." | " more

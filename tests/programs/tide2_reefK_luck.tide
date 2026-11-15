@@ -1,0 +1,6 @@
+# Claude #2b: luck test, K=2 coral (on/off) memory reef: 6 random reefs (both years random) per ring.
+use tide2_reefK
+20000 602 bury 2 603 bury
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / K % ;
+: roll 1 [ dice over 1000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+5 [ dup 600 bury ." ring " dup . ." : " 1 [ dup 700 bury hush roll run . 1 + dup 6 > if drop 0 then ] drop 10 emit 1 + dup 24 > if drop 0 then ] drop

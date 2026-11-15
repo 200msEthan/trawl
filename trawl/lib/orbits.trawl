@@ -1,0 +1,38 @@
+# orbits: follow a rule x -> step(x) until it comes back around.
+#   use orbits
+#
+# Define the rule first, as a word called `step` that takes one number and gives one back:
+#
+#   : step dup * 31 % ;          # x -> x^2 mod 31
+#   5 orbit . .                  # prints the loop length, then the tail length
+#
+#   orbit   ( x -- tail loop )   tail = steps before the loop starts, loop = its length.
+#                                Brent's method: no memory beyond a few cells, any length.
+#   lands   ( x -- y )           the first number of the loop that x falls into
+#   steps   ( x k -- y )         apply step k times
+#
+# Working cells: -65279 .. -65270 (leave them alone).
+
+: steps -65279 bury
+  -65279 dig 0 > [ drop step -65279 dig 1 - -65279 bury -65279 dig 0 > ] drop ;
+
+: orbit -65278 bury
+  1 -65277 bury 1 -65276 bury
+  -65278 dig -65275 bury
+  -65278 dig step -65274 bury
+  -65275 dig -65274 dig = 0 = [ drop
+    -65277 dig -65276 dig = if -65274 dig -65275 bury -65277 dig 2 * -65277 bury 0 -65276 bury then
+    -65274 dig step -65274 bury
+    -65276 dig 1 + -65276 bury
+    -65275 dig -65274 dig = 0 = ] drop
+  -65278 dig -65275 bury
+  -65278 dig -65276 dig steps -65274 bury
+  0 -65273 bury
+  -65275 dig -65274 dig = 0 = [ drop
+    -65275 dig step -65275 bury
+    -65274 dig step -65274 bury
+    -65273 dig 1 + -65273 bury
+    -65275 dig -65274 dig = 0 = ] drop
+  -65273 dig -65276 dig ;
+
+: lands dup orbit drop steps ;

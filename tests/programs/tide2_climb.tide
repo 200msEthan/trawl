@@ -1,0 +1,12 @@
+# Claude #2b: THE CLIMBERS. A queue of n cards numbered 1..n (all different). Each turn the front card with
+# number v slides back to place v (so card 1 stays in front... no: card v goes behind v-1 others) and then
+# its number goes up by one (n wraps to 1). Loop length by echo.
+use stdlib
+: n 600 dig ;
+: a 1000 + dig ;
+: put 1000 + bury ;
+: step 1 a dup n % 1 + 820 bury n min 821 bury 821 dig 1 > if 1 [ dup 1 + a over put 1 + dup 821 dig = if drop 0 then ] drop then 820 dig 821 dig put ;
+: look 1001 1000 n + echo ;
+: deal 1 [ dup over put 1 + dup n > if drop 0 then ] drop ;
+: CAP 602 dig ;
+: run look drop 0 501 bury 1 [ drop step 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;

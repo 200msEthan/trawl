@@ -1,0 +1,7 @@
+# every prime below 60, using the standard library (written in Tide)
+use stdlib
+." primes:" cr
+2 [ dup prime if dup . then 1 + dup 60 < if else drop 0 then ]
+cr ." fib 20 = " 20 fib . cr
+." 12! = " 12 fact . cr
+." gcd(1071, 462) = " 1071 462 gcd . cr

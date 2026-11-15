@@ -1,0 +1,4 @@
+# Claude #2b: for primes P, fire a beam into every row from the left; print where each one leaves.
+use tide2_mirrors
+: hall dup 603 bury clear squares ." P=" . ." : " 0 1 [ drop dup fire . 1 + dup P = if 0 else 1 then ] drop drop 10 emit ;
+5 hall 7 hall 11 hall 13 hall 17 hall 19 hall

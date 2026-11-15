@@ -1,0 +1,2 @@
+: order 1 bury 2 1 1 [ drop swap 2 * 1 dig % swap 1 + over 1 - ] drop swap drop ;
+3 order . 5 order . 11 order . 23 order . 29 order . 41 order . 53 order . 83 order . 89 order . 10 emit

@@ -1,0 +1,20 @@
+# Claude #2: a whole family of memory reefs, scanned by Tide.
+# Rule (a b d e): new = a x (left + right) + b x itself + d x itself x last-year + e x last-year, remainder after 3.
+# For each of the 81 rules, measure the loop on rings 5 to 16 (0 = no repeat within 600 years).
+: n 600 dig ;
+: i 810 dig ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow 810 bury i c i o * 803 dig * i c 802 dig * + i o 804 dig * + i left c i right c + 801 dig * + 3 % i 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+: look 1001 1000 n 2 * + echo ;
+: measure wipe hush 0 501 bury 1 1001 bury look drop 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig 600 > 0 = * ] drop 500 dig ;
+: digit 3 % ;
+: setrule 1 - dup digit 801 bury 3 / dup digit 802 bury 3 / dup digit 803 bury 3 / digit 804 bury ;
+: rings 5 [ dup 600 bury measure . 1 + dup 16 > if drop 0 then ] drop ;
+1 [ dup setrule ." rule " 801 dig . 802 dig . 803 dig . 804 dig . ." : " rings 10 emit 1 + dup 81 > if drop 0 then ] drop

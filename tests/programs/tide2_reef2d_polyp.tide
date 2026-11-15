@@ -1,0 +1,4 @@
+# Claude #2: one polyp on square 2D seas, 3x3 to 12x12. Loop length (0 = none within 3000 years).
+use tide2_reef2d
+3000 602 bury
+3 [ dup 600 bury dup 601 bury ." sea " dup . ." loop " polyp . ." found at year " 501 dig . 10 emit 1 + dup 12 > if drop 0 then ] drop

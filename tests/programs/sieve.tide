@@ -1,0 +1,6 @@
+# every prime up to 200, the old way: cross out multiples on the seabed
+: limit 200 ;
+: cross-out dup dup * [ 1 over bury over + dup limit > if drop 0 then ] drop ;
+2 [ dup dup * limit > if drop 0 else dup dig 0 = if cross-out then 1 + then ] drop
+." sieved primes: "
+2 [ dup dig 0 = if dup . then 1 + dup limit > if drop 0 then ] drop

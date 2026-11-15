@@ -1,0 +1,16 @@
+# Claude #2b: THE DECK. n boats carry 0..K-1 crates. The front boat takes the crates of the boat
+# behind it (remainder after K) and sails to place (crates + 2), or the very back if that is past the end.
+# The load is its own address: a self-sorting, self-shuffling queue.
+use stdlib
+: n 600 dig ;
+: K 603 dig ;
+: a 1000 + dig ;
+: put 1000 + bury ;
+: step 1 a 2 a + K % dup 820 bury 2 + n min 821 bury 1 [ dup 1 + a over put 1 + dup 821 dig = if drop 0 then ] drop 820 dig 821 dig put ;
+: look 1001 1000 n + echo ;
+: wipe 1 [ 0 over put 1 + dup n > if drop 0 then ] drop ;
+: CAP 602 dig ;
+: sail look drop 0 501 bury 1 [ drop step 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / K % ;
+: roll 1 [ dice over put 1 + dup n > if drop 0 then ] drop ;
+: show 1 [ dup a 48 + emit 1 + dup n > if drop 0 then ] drop 10 emit ;

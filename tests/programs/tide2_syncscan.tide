@@ -1,0 +1,22 @@
+# Claude #2: robust sync scan. For each rule with a real memory part, on rings 5-13: out of 4 random reefs, how many fall into a tiny loop (4 years or less) within 200 years?
+: n 600 dig ;
+: i 810 dig ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow 810 bury i c i o * 803 dig * i c 802 dig * + i o 804 dig * + i left c i right c + 801 dig * + 3 % i 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+: look 1001 1000 n 2 * + echo ;
+: digit 3 % ;
+: setrule 1 - dup digit 801 bury 3 / dup digit 802 bury 3 / dup digit 803 bury 3 / digit 804 bury ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / 3 % ;
+: roll 1 [ dice over 1000 + bury dice over n + 1000 + bury 1 + dup n > if drop 0 then ] drop ;
+: rmeasure wipe hush 0 501 bury roll look drop 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig 200 > 0 = * ] drop 500 dig ;
+: short? dup 0 > swap 5 < * ;
+: tries 0 1 [ dup 700 bury rmeasure short? rot + swap 1 + dup 4 > if drop 0 then ] drop ;
+: rings 5 [ dup 600 bury tries . 1 + dup 13 > if drop 0 then ] drop ;
+1 [ dup setrule 803 dig if ." rule " 801 dig . 802 dig . 803 dig . 804 dig . ." : " rings 10 emit then 1 + dup 81 > if drop 0 then ] drop

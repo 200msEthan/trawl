@@ -1,0 +1,8 @@
+# Claude #2: every right-angle triangle with whole-number sides (a and b up to 20).
+# Guess a, b, c. If a*a + b*b is not c*c, the world sinks. `more` keeps each one found.
+use stdlib
+1 20 wave 1 bury
+1 dig 1 + 20 wave 2 bury
+2 dig 1 + 30 wave 3 bury
+1 dig sq 2 dig sq + 3 dig sq = want
+1 dig . 2 dig . 3 dig . ." | " more

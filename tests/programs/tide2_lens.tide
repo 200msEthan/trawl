@@ -1,0 +1,18 @@
+# Claude #2: lens hunt. For every ring size from 3 to 61, grow the memory reef (rule M2)
+# and watch for a lens: a year (after the first) when all the coral is just one pair, side by side.
+: n 600 dig ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow dup c over o * over left c + over right c + 3 % swap 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+# count: how many spots have coral, and the pair test: spot i and its right neighbour both young
+: count 0 1 [ dup c if swap 1 + swap then 1 + dup n > if drop 0 then ] drop ;
+: pair? 0 1 [ dup c 1 = over right c 1 = * if swap drop 1 swap then 1 + dup n > if drop 0 then ] drop ;
+: lens? count 2 = if pair? else 0 then ;
+: watch 2 [ each-grow each-shift lens? if ." lens in year " dup . 0 else 1 + dup 3000 > if ." none in 3000 years" 0 then then ] drop ;
+3 [ dup 600 bury wipe 1 1001 bury ." ring " n . watch 10 emit n 1 + dup 61 > if drop 0 then ]

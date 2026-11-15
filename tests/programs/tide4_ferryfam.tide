@@ -1,0 +1,22 @@
+# Claude #2d: THE FERRY FAMILY in Tide. Base b (cell 1), carry factor c (cell 2), window m (cell 3).
+# State: carry h (cell 4) + window value w (cell 5, m base-b digits). Step: y = oldest digit, z = c*y + h,
+# new digit (b-1) - (z mod b) enters, h = z / b. Counts steps for the start h=0, w=1 to come back,
+# and prints that next to the order of b mod M = c*b^m + 1 (the proof says the two are equal).
+use stdlib
+: b 1 dig ; : c 2 dig ; : m 3 dig ;
+: pw 1 swap dup 0 > if [ swap b * swap 1 - ] then drop ;
+: top m 1 - pw ;
+: step 5 dig top / c * 4 dig + dup b / 4 bury b % b 1 - swap - 5 dig top % b * + 5 bury ;
+: atstart 4 dig 0 = 5 dig 1 = * ;
+: loop 0 4 bury 1 5 bury 0 1 [ drop step 1 + atstart 0 = ] drop ;
+: bigm c m pw * 1 + ;
+: order 0 1 1 [ drop b * bigm % swap 1 + swap dup 1 = 0 = ] drop drop ;
+: try 3 bury 2 bury 1 bury b . c . m . loop . order . cr ;
+3 2 1 try
+3 2 2 try
+3 2 3 try
+3 2 4 try
+5 2 2 try
+2 5 3 try
+7 3 2 try
+4 3 3 try

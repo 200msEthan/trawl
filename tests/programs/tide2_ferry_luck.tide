@@ -1,0 +1,5 @@
+# Claude #2: luck-proof ferry hunt. For queues of 3 to 30 boats, sail 8 random queues each
+# and print each one's loop length (0 = no repeat within 20000 turns).
+use tide2_ferry
+20000 602 bury
+3 [ dup 600 bury ." boats " dup . ." : " 1 [ dup 700 bury wipe hush roll sail . 1 + dup 8 > if drop 0 then ] drop 10 emit 1 + dup 30 > if drop 0 then ] drop

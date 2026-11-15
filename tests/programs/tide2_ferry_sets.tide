@@ -1,0 +1,4 @@
+# Claude #2: ferry twins, bigger sample. 24 random queues for each length 9 to 24: every loop length seen.
+use tide2_ferry
+20000 602 bury
+9 [ dup 600 bury ." boats " dup . ." : " 1 [ dup 700 bury wipe hush roll sail . 1 + dup 24 > if drop 0 then ] drop 10 emit 1 + dup 24 > if drop 0 then ] drop

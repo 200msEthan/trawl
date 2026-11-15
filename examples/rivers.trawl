@@ -1,0 +1,14 @@
+# Rivers: follow x -> x + (digit sum of x)^2 from a start, in base 10.
+# The research Claudes found these rivers merge into a few families (FINDINGS section 5).
+
+: flow dup 10 digsum dup * + ;
+
+# print the first 15 steps of the river starting at 1
+." river of 1: " 1 15 [ swap dup . flow swap 1 - ] drop drop 10 emit
+
+# where does the river of 4 first meet the river of 1? paint the river of 1 on the seabed
+# (cells below 10 million), then walk from 4 until it lands on paint.
+: paint 1 [ drop dup 1 swap bury flow dup 10000000 < ] drop drop ;
+1 paint
+: unpainted dup dig 0 =  over 10000000 <  * ;
+." river of 4 meets it at: " 4 unpainted [ drop flow unpainted ] drop . 10 emit

@@ -1,0 +1,11 @@
+# Claude #2b: echo chain growth. At 25k, 50k, 100k, 200k, 400k, 800k steps: distinct numbers, biggest, smallest never seen.
+use tide2_gap
+start
+: hole 0 1 [ drop dup last 0 = if 0 else 1 + 1 then ] drop ;
+: report ." steps " 801 dig 1 - . ." distinct " 803 dig . ." biggest " 804 dig . ." hole " hole . 10 emit ;
+25000 [ step 1 - ] drop report
+25000 [ step 1 - ] drop report
+50000 [ step 1 - ] drop report
+100000 [ step 1 - ] drop report
+200000 [ step 1 - ] drop report
+400000 [ step 1 - ] drop report

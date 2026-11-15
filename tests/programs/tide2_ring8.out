@@ -1,0 +1,13 @@
+rule 2 0 2 0, out of 20 random reefs, how many fall into a tiny loop within 3000 years
+ring 4 18 
+ring 5 1 
+ring 6 1 
+ring 7 0 
+ring 8 20 
+ring 9 1 
+ring 10 0 
+ring 11 7 
+ring 12 5 
+ring 16 2 
+ring 32 0 
+

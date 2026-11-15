@@ -1,0 +1,5 @@
+# Claude #2b: 2D bathtubs, k=5, 0-99 cups. 10 random seas per size; loop lengths (0 = none in 5000 turns).
+use tide2_tub2d
+5000 602 bury 100 704 bury 5 705 bury
+: sea 601 bury 600 bury ." sea " R . ." x " C . ." : " 1 [ dup 700 bury hush roll run . 1 + dup 10 > if drop 0 then ] drop 10 emit ;
+3 3 sea 3 4 sea 4 4 sea 4 5 sea 5 5 sea 5 6 sea 6 6 sea 6 7 sea 7 7 sea 8 8 sea 6 10 sea

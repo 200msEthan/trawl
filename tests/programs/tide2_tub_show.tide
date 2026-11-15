@@ -1,0 +1,6 @@
+# Claude #2b: look inside a bathtub loop of length n (20 tubs, start 2, 0-29 cups, k=3).
+use tide2_tub
+20000 602 bury 30 704 bury 3 705 bury 20 600 bury
+: show 1 [ dup w . 1 + dup n > if drop 0 then ] drop 10 emit ;
+2 700 bury roll run ." loop " . 10 emit
+6 [ show turn 1 - ] drop

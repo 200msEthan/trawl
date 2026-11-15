@@ -1,0 +1,2 @@
+: next dup * 31 % ;
+5 12 [ swap next dup . swap 1 - ] drop drop

@@ -1,0 +1,7 @@
+# Claude #2: luck-proof 2D test. For every sea from 3x3 to 8x8: out of 4 random reefs,
+# how many settle into a short loop (50 years or less) within 500 years? Table: rows = height, columns = width.
+use tide2_reef2d
+500 602 bury
+: short? dup 0 > swap 51 < * ;
+: tries 0 1 [ dup 700 bury random-sea short? rot + swap 1 + dup 4 > if drop 0 then ] drop ;
+3 [ dup 601 bury ." H" dup . ." : " 3 [ dup 600 bury tries . 1 + dup 8 > if drop 0 then ] drop 10 emit 1 + dup 8 > if drop 0 then ] drop

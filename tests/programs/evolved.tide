@@ -1,0 +1,2 @@
+# bred for 'cube-minus' in generation 20
+: evolved dup dup * 1 - * ;

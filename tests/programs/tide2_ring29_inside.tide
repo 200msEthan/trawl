@@ -1,0 +1,19 @@
+# Claude #2: ring 29, look inside its loop: is the memory part switched off?
+# Rule M2: each spot becomes left + right + (itself x what it was last year), remainder after 3.
+# Current reef at 1001.., last year's reef right after it, so `echo` can watch both at once.
+: n 29 ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow dup c over o * over left c + over right c + 3 % swap 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: years 501 dig ;
+# inside the loop, does the "itself x last year" part ever matter? count spots where it is not 0
+: busy 0 1 [ dup c over o * if swap 1 + swap then 1 + dup n > if drop 0 then ] drop ;
+1 1001 bury
+91800 [ each-grow each-shift 1 - ] drop
+0 1983 [ swap busy + swap each-grow each-shift 1 - ] drop
+." over one full 1983-year loop, spots where itself x last-year is not 0: " .

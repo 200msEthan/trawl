@@ -1,0 +1,6 @@
+# Claude #2b: climbers luck test: 10 random queues (card numbers 1..n at random) per n.
+use tide2_climb
+2000000 602 bury
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / n % 1 + ;
+: roll 1 [ dice over put 1 + dup n > if drop 0 then ] drop ;
+3 [ dup 600 bury ." n=" dup . ." : " 1 [ dup 700 bury hush roll run . 1 + dup 10 > if drop 0 then ] drop 10 emit 1 + dup 10 > if drop 0 then ] drop

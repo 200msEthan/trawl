@@ -1,0 +1,20 @@
+# Claude #2: rule (1 0 1 1) on rings 21 and 11: long wild years, then the whole reef goes flat and pulses in step.
+: n 600 dig ;
+: i 810 dig ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow 810 bury i c i o * 803 dig * i c 802 dig * + i o 804 dig * + i left c i right c + 801 dig * + 3 % i 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+: look 1001 1000 n 2 * + echo ;
+: measure wipe hush 0 501 bury 1 1001 bury look drop 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig 3000 > 0 = * ] drop 500 dig ;
+1 801 bury 0 802 bury 1 803 bury 1 804 bury
+: show 1 [ dup c dup 0 = if drop 32 else 1 = if 46 else 35 then then emit 1 + dup n > if drop 0 then ] drop 124 emit 10 emit ;
+21 600 bury measure ." ring 21 loop " . ." found at year " 501 dig . 10 emit
+4 [ show each-grow each-shift 1 - ] drop
+11 600 bury measure ." ring 11 loop " . ." found at year " 501 dig . 10 emit
+4 [ show each-grow each-shift 1 - ] drop

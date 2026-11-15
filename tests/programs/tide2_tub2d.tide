@@ -1,0 +1,22 @@
+# Claude #2b: 2D BATHTUBS on a doughnut of R rows (600) x C columns (601). Each tub pours 1/k (705) of its
+# water, rounded down, to each of its 4 neighbours, all at once. Cells are numbered 1..R*C at 1000+.
+use stdlib
+: R 600 dig ;
+: C 601 dig ;
+: N R C * ;
+: w 1000 + dig ;
+: give w 705 dig / ;
+: row 1 - C / ;
+: col 1 - C % ;
+: at swap R + R % C * swap C + C % + 1 + ;
+: up dup row 1 - swap col at ;
+: down dup row 1 + swap col at ;
+: west dup row swap col 1 - at ;
+: east dup row swap col 1 + at ;
+: new dup w over give 4 * - over up give + over down give + over west give + over east give + swap 3000 + bury ;
+: turn 1 [ dup new 1 + dup N > if drop 0 then ] drop 1 [ dup 3000 + dig over 1000 + bury 1 + dup N > if drop 0 then ] drop ;
+: look 1001 1000 N + echo ;
+: CAP 602 dig ;
+: run look drop 0 501 bury 1 [ drop turn 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / 704 dig % ;
+: roll 1 [ dice over 1000 + bury 1 + dup N > if drop 0 then ] drop ;

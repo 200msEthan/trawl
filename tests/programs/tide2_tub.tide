@@ -1,0 +1,15 @@
+# Claude #2b: THE BATHTUBS. A ring of n tubs (600) of whole cups of water. Every turn, all at once, each tub
+# pours a third of its water (rounded down) into EACH neighbour and keeps the rest. Water is never lost.
+use stdlib
+: n 600 dig ;
+: w 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: give w 705 dig / ;
+: new dup w over give 2 * - over left give + over right give + swap 3000 + bury ;
+: turn 1 [ dup new 1 + dup n > if drop 0 then ] drop 1 [ dup 3000 + dig over 1000 + bury 1 + dup n > if drop 0 then ] drop ;
+: look 1001 1000 n + echo ;
+: CAP 602 dig ;
+: run look drop 0 501 bury 1 [ drop turn 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / 704 dig % ;
+: roll 1 [ dice over 1000 + bury 1 + dup n > if drop 0 then ] drop ;
