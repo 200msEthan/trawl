@@ -1,0 +1,60 @@
+# OEIS A398813: the smallest number that takes k steps to reach 1 when each number is
+# replaced by how many ways it factors (A001055, the built-in `factorings`).
+#   2507653251072000000000000 -> 729108451671600 -> 10920630 -> 2610 -> 36 -> 9 -> 2 -> 1
+#
+# The count only depends on the exponents of a number's prime factors, so the smallest
+# number for each k has exponents that never increase along the primes: 2^a 3^b 5^c ...
+# with a >= b >= c >= ... (A025487). The search walks every such number up to a bound.
+#
+# Part 1 finds a(0) .. a(6) below 10^10. Part 2 checks every candidate up to
+# 2^31 3^14 5^12 and prints each one that takes 7 or more steps: only that number itself.
+# Part 2 is a sweep over the exponent of 2, so it runs on every core:
+#   trawl fast examples/a398813.trawl --jobs 0 --receipt a398813.receipt
+
+# pers ( n -- how many steps it takes to reach 1 )
+: pers 0 swap dup 1 - [ drop factorings swap 1 + swap dup 1 - ] drop drop ;
+
+# the first 40 primes, in cells 100, 101, ...
+: primes 0 -3 bury 2 1 [ drop dup prime if dup -3 dig 100 + bury -3 dig 1 + -3 bury then 1 + -3 dig 40 < ] drop drop ;
+
+# visit ( n -- ). With cell -7 = 0: keep n in cell 2000 + k if it is the smallest seen that
+# takes k steps. With cell -7 = K: print n if it takes K or more steps, and count it in cell -6.
+: visit -4 bury -4 dig pers -5 bury
+  -7 dig if
+    -5 dig -7 dig < 0 = if -4 dig . 10 emit -6 dig 1 + -6 bury then
+  else
+    -5 dig 2000 + -5 bury
+    -5 dig dig 0 =  -4 dig -5 dig dig <  +  if -4 dig -5 dig bury then
+  then ;
+
+# gen ( n maxe i -- ): visit n, then every n p^e (e = 1 .. maxe, up to the bound in cell -2)
+# with p the i-th prime, and so on down. Each level keeps its own cells: at ( slot -- address )
+# for the current depth, in cell -1.
+: at -1 dig 8 * 1000 + + ;
+: gen
+  -1 dig 1 + -1 bury
+  2 at bury 1 at bury dup 0 at bury visit
+  0 at dig 3 at bury  1 4 at bury
+  1 [ drop
+    3 at dig 2 at dig 100 + dig * 3 at bury
+    3 at dig -2 dig > 0 =  4 at dig 1 at dig > 0 =  *
+    dup if 3 at dig 4 at dig 2 at dig 1 + gen  4 at dig 1 + 4 at bury then
+  ] drop
+  -1 dig 1 - -1 bury ;
+
+# block ( a -- found? ): every candidate whose exponent of 2 is a
+: block 0 -6 bury 0 -1 bury
+  2 over power dup -2 dig > if drop drop else swap 1 gen then
+  -6 dig 0 = 0 = ;
+
+primes
+
+# Part 1: a(0) .. a(6)
+10 10 power -2 bury  0 -7 bury
+1 1000 0 gen
+0 1 [ drop dup 2000 + dig dup if over . ." steps: " . 10 emit 1 + 1 else drop 0 then ] drop drop
+
+# Part 2: nothing up to a(7) takes 7 steps except a(7)
+2 31 power 3 14 power * 5 12 power * -2 bury  7 -7 bury
+." up to " -2 dig . ." these take " -7 dig . ." or more steps:" 10 emit
+1 82 sweep block drop

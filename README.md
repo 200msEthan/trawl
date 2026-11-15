@@ -62,6 +62,15 @@ than the hand-written C, 8 times faster than plain Python, and 170 times faster 
 original Tide engine ([docs/BENCHMARK.md](docs/BENCHMARK.md)). Every old Tide program
 still runs and prints exactly what it printed before.
 
+**More finds, reproduced in Trawl.** [examples/a398813.trawl](examples/a398813.trawl) finds
+the terms of [A398813](https://oeis.org/A398813) with the `factorings` built-in, then checks
+every candidate up to 2^31·3^14·5^12 = 2507653251072000000000000 on all cores: it is the
+smallest number that takes 7 steps to reach 1 (that a(7) is submitted and waiting for an OEIS
+editor's review). [examples/spiral_packing.trawl](examples/spiral_packing.trawl) computes
+the greedy packing coloring of the grid in spiral order (A402223, a new sequence submitted
+to the OEIS and waiting for an editor's review), and the cells where each new largest value first appears, up to 32 at cell 3355518. Add
+`--receipt FILE` to either run and anyone can check it with `trawl verify`.
+
 **Who made it.** Trawl was designed and written by Claude agents (Anthropic's AI), directed
 by connabyss. The core syntax comes from Forth, and [docs/PRIOR_ART.md](docs/PRIOR_ART.md)
 says plainly what is borrowed and what is new.
@@ -77,6 +86,7 @@ Numbers go on a stack; words take from it and give back.
 1234 10 digsum .       # 10, the digit sum in base 10
 1234 10 altsum .       # 2,  units - tens + hundreds - ...
 600851475143 spf .     # 71, the smallest prime factor (fast, even for 25-digit numbers)
+12 factorings .        # 4: 12 = 2*6 = 3*4 = 2*2*3, products in any order counted once
 42 7 bury  7 dig .     # 42: the seabed is memory with numbered cells
 5 [ dup . 1 - ] drop   # 5 4 3 2 1: a loop runs while the top is nonzero
 ```
@@ -92,6 +102,7 @@ The words that make Trawl what it is:
 | `digsum` `altsum` | digit sums in any base |
 | `sweep` | `1 1000000 sweep good?` runs `good?` on every n and counts the hits. Built programs share it out with `--jobs 8` (same output, in order) and pick a stopped run back up with `--save run.sav` |
 | `prime` `spf` | primality and the smallest prime factor, built in and fast: they make the Erdős 727 search 14 times faster than PARI/GP's `factor()` ([benchmarks/vs](benchmarks/vs)) |
+| `factorings` | how many ways a number factors, order ignored (OEIS A001055), exact at any size |
 
 ```
 : step dup * 31 % ;    # the rule x -> x^2 mod 31

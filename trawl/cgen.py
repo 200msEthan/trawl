@@ -511,6 +511,8 @@ class Gen:
             f.push(f.temp(f"v_prime({f.pop(t, 1).expr})"))
         elif t == "spf":
             f.push(f.temp(f"v_spf({f.pop(t, 1).expr})"))
+        elif t == "factorings":
+            f.push(f.temp(f"v_factorings({f.pop(t, 1).expr})"))
         elif t == "power":
             k, a = f.pop(t, 2), f.pop(t, 2)
             f.push(f.temp(f"v_power({a.expr}, {k.expr})"))

@@ -613,6 +613,113 @@ static V v_spf(V n) {
   return big_spf(n);
 }
 
+/* ------------------------------------------------------------------ factorings */
+/* How many ways n is a product of whole numbers above 1, order ignored (OEIS A001055).
+   The answer depends only on the exponents v of n's factorization (largest first), and
+   v[0] f(v) = sum over nonzero w <= v of c(w) f(v - w), with c(w) = sum over d | gcd(w) of w[0] / d.
+   Answers are remembered by exponent pattern for the whole run (marked by the garbage collector). */
+
+typedef struct { uint64_t h; int k; int *e; V val; } FMemo;
+static FMemo *fmemo = NULL; static int64_t fmemo_cap = 0, fmemo_n = 0;
+static uint64_t f_hash(const int *e, int k) {
+  uint64_t h = 1469598103934665603ULL ^ (uint64_t)k;
+  for (int i = 0; i < k; i++) { h ^= (uint64_t)(uint32_t)e[i]; h *= 1099511628211ULL; }
+  h ^= h >> 33; h *= 0xff51afd7ed558ccdULL; h ^= h >> 33;
+  return h;
+}
+static FMemo *f_find(const int *e, int k, uint64_t h) {
+  if (!fmemo_cap) return NULL;
+  for (int64_t i = (int64_t)(h & (uint64_t)(fmemo_cap - 1));; i = (i + 1) & (fmemo_cap - 1)) {
+    FMemo *m = &fmemo[i];
+    if (!m->e) return NULL;
+    if (m->h == h && m->k == k && !memcmp(m->e, e, sizeof(int) * (size_t)k)) return m;
+  }
+}
+static void f_put(const int *e, int k, uint64_t h, V val) {
+  if ((fmemo_n + 1) * 2 > fmemo_cap) {
+    FMemo *old = fmemo; int64_t oc = fmemo_cap;
+    fmemo_cap = oc ? oc * 2 : 1024; fmemo = (FMemo *)calloc((size_t)fmemo_cap, sizeof(FMemo));
+    for (int64_t i = 0; i < oc; i++) if (old[i].e) {
+      int64_t j = (int64_t)(old[i].h & (uint64_t)(fmemo_cap - 1));
+      while (fmemo[j].e) j = (j + 1) & (fmemo_cap - 1);
+      fmemo[j] = old[i];
+    }
+    free(old);
+  }
+  int64_t j = (int64_t)(h & (uint64_t)(fmemo_cap - 1));
+  while (fmemo[j].e) j = (j + 1) & (fmemo_cap - 1);
+  int *copy = (int *)malloc(sizeof(int) * (size_t)(k ? k : 1)); memcpy(copy, e, sizeof(int) * (size_t)k);
+  fmemo[j].h = h; fmemo[j].k = k; fmemo[j].e = copy; fmemo[j].val = val; fmemo_n++;
+}
+static int i_gcd(int a, int b) { while (b) { int t = a % b; a = b; b = t; } return a; }
+static void i_sort_desc(int *r, int n) { for (int i = 1; i < n; i++) { int x = r[i], j = i; while (j && r[j - 1] < x) { r[j] = r[j - 1]; j--; } r[j] = x; } }
+static int64_t f_binom(int n, int k) { int64_t b = 1; for (int i = 1; i <= k; i++) b = b * (n - k + i) / i; return b; }
+static V f_count(const int *v, int k);
+/* Positions with equal exponents are interchangeable (except the first, whose part w[0]
+   enters c(w)), so each group of m equal exponents a is handled as a multiset: how many of
+   its positions take each part t = 0..a, weighted by the multinomial count of arrangements. */
+typedef struct { const int *ga, *gm; int ng, w0, v0, k; int *cnt; int *r; V tot; } FCtx;
+static void f_leaf(FCtx *x, V weight) {
+  int g = x->w0, n = 0;
+  for (int j = 0, o = 0; j < x->ng; o += x->ga[j] + 1, j++)
+    for (int t = 0; t <= x->ga[j]; t++) if (x->cnt[o + t]) {
+      if (t) g = i_gcd(g, t);
+      for (int c = 0; c < x->cnt[o + t]; c++) if (x->ga[j] > t) x->r[n++] = x->ga[j] - t;
+    }
+  int64_t c = 0; for (int d = 1; d <= g; d++) if (g % d == 0) c += x->w0 / d;
+  if (x->v0 > x->w0) x->r[n++] = x->v0 - x->w0;
+  i_sort_desc(x->r, n);
+  V f = f_count(x->r, n); /* x->r is only read: a deeper count has its own buffer */
+  x->tot = v_add(x->tot, v_mul(v_mul(MKV(c), weight), f));
+}
+static void f_walk(FCtx *x, int j, int o, int t, int left, V weight) {
+  if (j == x->ng) { f_leaf(x, weight); return; }
+  int a = x->ga[j];
+  if (t == a) { /* the rest of this group takes part a */
+    x->cnt[o + t] = left;
+    f_walk(x, j + 1, o + a + 1, 0, j + 1 < x->ng ? x->gm[j + 1] : 0, weight);
+    x->cnt[o + t] = 0;
+    return;
+  }
+  for (int c = 0; c <= left; c++) {
+    x->cnt[o + t] = c;
+    f_walk(x, j, o, t + 1, left - c, c ? v_mul(weight, MKV(f_binom(left, c))) : weight);
+  }
+  x->cnt[o + t] = 0;
+}
+static V f_count(const int *v, int k) {
+  if (k == 0) return MKV(1);
+  uint64_t h = f_hash(v, k);
+  FMemo *m = f_find(v, k, h);
+  if (m) return m->val;
+  int *ga = (int *)malloc(sizeof(int) * (size_t)k), *gm = (int *)malloc(sizeof(int) * (size_t)k), ng = 0, cells = 0;
+  for (int i = 1; i < k; i++) {
+    if (ng && ga[ng - 1] == v[i]) gm[ng - 1]++;
+    else { ga[ng] = v[i]; gm[ng] = 1; ng++; cells += v[i] + 1; }
+  }
+  FCtx x; x.ga = ga; x.gm = gm; x.ng = ng; x.v0 = v[0]; x.k = k; x.tot = MKV(0);
+  x.cnt = (int *)calloc((size_t)(cells ? cells : 1), sizeof(int)); x.r = (int *)malloc(sizeof(int) * (size_t)k);
+  for (x.w0 = 1; x.w0 <= v[0]; x.w0++) f_walk(&x, 0, 0, 0, ng ? gm[0] : 0, MKV(1));
+  V res = v_div(x.tot, MKV(v[0]));
+  free(ga); free(gm); free(x.cnt); free(x.r);
+  f_put(v, k, h, res);
+  return res;
+}
+static V v_factorings(V n) {
+  if (v_cmp(n, MKV(1)) < 0) { char *s = v_to_str(n); rt_die("factorings needs a whole number of 1 or more, not %s", s); }
+  int *e = NULL, k = 0, cap = 0;
+  while (v_cmp(n, MKV(1)) > 0) {
+    V p = v_spf(n); int x = 0;
+    while (v_mod(n, p) == 0) { n = v_div(n, p); x++; }
+    if (k == cap) { cap = cap ? cap * 2 : 16; e = (int *)realloc(e, sizeof(int) * (size_t)cap); }
+    e[k++] = x;
+  }
+  i_sort_desc(e, k);
+  V r = f_count(e, k);
+  free(e);
+  return r;
+}
+
 /* ------------------------------------------------------------------ output */
 
 static char *wbuf = NULL; static size_t wbuf_len = 0, wbuf_cap = 0; /* this world's words */
@@ -1150,6 +1257,7 @@ static void gc_run(long sp) {
   for (int w = 0; w < N_PEARL_WORDS; w++) for (int64_t i = 0; i < shells[w].cap; i++) if (shells[w].t[i].full) { mark(shells[w].t[i].key); mark(shells[w].t[i].val); }
   for (long i = 0; i < tape_n; i++) { mark(tape[i].lo); mark(tape[i].hi); mark(tape[i].cur); }
   mark(best_score);
+  for (int64_t i = 0; i < fmemo_cap; i++) if (fmemo[i].e) mark(fmemo[i].val);
   Big **p = &big_list; big_bytes = 0;
   while (*p) {
     Big *b = *p;

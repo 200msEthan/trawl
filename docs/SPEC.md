@@ -60,6 +60,7 @@ effects are written `( before -- after )`, top of the stack on the right.
 | `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1) |
 | `prime` | `( n -- flag )` 1 if `n` is prime, else 0 (0 for `n < 2`). Exact below 3.3·10^24 (strong probable-prime tests to the first 13 primes, which no composite below that passes). Above it, it is a probable-prime test: right for any number you're likely to meet, but a composite built on purpose to fool those 13 tests would pass |
 | `spf` | `( n -- p )` the smallest prime factor of `n` (`n >= 2`; `n` itself when `n` is prime, by the same test as `prime`). Fast up to about 10^30; a number whose two smallest prime factors both have 20 or more digits can take a very long time |
+| `factorings` | `( n -- count )` how many ways `n` is a product of whole numbers above 1, order ignored (OEIS A001055; `n >= 1`, and `1 factorings` is 1). `12 factorings` is 4: 12, 2·6, 3·4, 2·2·3. It factors `n` (as `spf` does) and counts from the exponents alone, remembering every exponent pattern it has counted. Exact for any size; slow when `n` has many distinct prime factors with large exponents |
 
 ## 5. Digits in any base
 

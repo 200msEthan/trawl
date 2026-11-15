@@ -14,9 +14,9 @@ ARITH = ["+", "-", "*", "/", "%", "=", "<", ">"]
 STACK = ["dup", "drop", "swap", "over", "rot", "fold", "depth"]
 OUTPUT = [".", "emit", ".s", ".bed", ".pearls"]
 SEABED = ["bury", "dig", "drain"]
-NUMBERS = ["digsum", "altsum", "power", "prime", "spf"]
+NUMBERS = ["digsum", "altsum", "power", "prime", "spf", "factorings"]
 # built-ins added after Tide: old programs that defined their own word by one of these names keep it
-YOURS_WINS = {"prime", "spf"}
+YOURS_WINS = {"prime", "spf", "factorings"}
 ECHO = ["echo", "hush"]
 WORLDS = ["wave", "want", "more", "aim", "worlds"]
 SYNTAX = ["if", "else", "then", "[", "]", ":", ";", "use", "pearl", "sweep"]
@@ -24,7 +24,7 @@ BUILTINS = ARITH + STACK + OUTPUT + SEABED + NUMBERS + ECHO + WORLDS + SYNTAX
 
 # How many numbers each word takes off the stack (for error messages and the compiler).
 WANTS = {**{w: 2 for w in ARITH}, "dup": 1, "drop": 1, "swap": 2, "over": 2, "rot": 3,
-         ".": 1, "emit": 1, "bury": 2, "dig": 1, "digsum": 2, "altsum": 2, "power": 2, "prime": 1, "spf": 1,
+         ".": 1, "emit": 1, "bury": 2, "dig": 1, "digsum": 2, "altsum": 2, "power": 2, "prime": 1, "spf": 1, "factorings": 1,
          "echo": 2, "wave": 2, "want": 1, "aim": 1, "if": 1, "sweep": 2}
 
 EXTENSIONS = (".trawl", ".tide")
