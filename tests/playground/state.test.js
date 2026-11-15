@@ -34,7 +34,9 @@ const idle = (p) => p.waitForFunction(() => !running && ready && catchQueue.leng
 const introOver = (p) => p.waitForFunction(() => !intro.on, null, T);
 const pick = (p, id) => p.selectOption("#examples", id);
 const says = (p) => p.$$eval("#catches .catch:not(.find) .say", (els) => els.map((e) => e.textContent).reverse());
-const setKnob = (p, i, v) => p.$eval(`#knob${i}`, (r, v) => { r.value = v; r.dispatchEvent(new Event("input")); }, v);
+// sliders never start a hunt by themselves: change one, then "press Run" (rerun() also stops a hunt that's going)
+const setKnob = (p, i, v) => p.$eval(`#knob${i}`, (r, v) => { r.value = v; r.dispatchEvent(new Event("input")); rerun(); }, v);
+const setKnobOnly = (p, i, v) => p.$eval(`#knob${i}`, (r, v) => { r.value = v; r.dispatchEvent(new Event("input")); }, v);
 
 // everything on screen agrees with the example `id`, and with a finished run of its code as it stands
 async function consistent(p, id, label, fingerprint) {
@@ -43,10 +45,12 @@ async function consistent(p, id, label, fingerprint) {
     title: document.getElementById("about-title").textContent,
     knobs: [...document.querySelectorAll("#knobs .knob:not([hidden]) label")].map((l) => l.textContent),
     status: document.getElementById("status-text").textContent,
-    note: !document.getElementById("callout").hidden && document.getElementById("caption").textContent,
+    // what a person sees: the callout's hidden flag only counts if the page really hides it
+    note: getComputedStyle(document.getElementById("callout")).display !== "none" && document.getElementById("caption").textContent,
     now: document.getElementById("now").textContent,
     count: +document.getElementById("count").textContent.replace(/,/g, ""),
     shown: document.querySelectorAll("#catches .catch:not(.find)").length,
+    finds: document.querySelectorAll("#catches .catch.find").length,
     long: [...document.querySelectorAll("#catches .say")].some((e) =>
       [...e.childNodes].some((n) => n.nodeType === 3 && /\d{25}/.test(n.textContent))),
     run: document.getElementById("run").textContent,
@@ -59,7 +63,8 @@ async function consistent(p, id, label, fingerprint) {
   expect(/^done|^stopped with an error/.test(s.status), `${label}: status "${s.status}" after the run ended`);
   expect(!(s.note && s.note.startsWith("Still hunting")), `${label}: "Still hunting" note shown after the run ended (${s.status})`);
   expect(s.now === "", `${label}: "${s.now}" still shown after the run ended`);
-  expect(s.count === Math.min(s.count, 40) ? s.shown === s.count : s.shown === 40, `${label}: counter says ${s.count}, ${s.shown} cards shown`);
+  // the newest 40 cards stay on screen; highlighted cards (Erdős finds, summaries) take some of those places
+  expect(s.shown === Math.min(s.count, 40 - s.finds), `${label}: counter says ${s.count}, ${s.shown} cards shown (+${s.finds} highlighted)`);
   expect(!s.long, `${label}: a catch shows a huge number in full`);
   expect(s.run === "Run", `${label}: button says ${s.run}`);
   if (fingerprint) {
@@ -169,6 +174,47 @@ async function consistent(p, id, label, fingerprint) {
   const helloAt10 = await says(s);
   expect(helloAt10.some((l) => l.includes("2 to the power 10")), "slider during load: the run uses the new value");
   await consistent(s, "hello", "slider during load");
+
+  // 11. the 196 curse: summary lines ("= ...") show as highlighted cards and are not counted
+  const c = await open(browser, "#curse");
+  await introOver(c); await idle(c);
+  expect(await c.$eval("#count", (e) => e.textContent) === "13", "curse: 13 catches, the cursed numbers below 1000");
+  const sums = await c.$$eval("#catches .catch.find .say", (els) => els.map((e) => e.textContent));
+  expect(sums.length === 2 && sums.some((t) => t.includes("89 broke free after 24 flips")) && sums.some((t) => t.includes("started by: 196 879")),
+    `curse: two summary cards (${JSON.stringify(sums)})`);
+  expect(sums.every((t) => t.startsWith("Summary") && !t.includes("= ")), "curse: summary cards say Summary, without the = sign");
+  expect((await c.$eval("#knob0", (r) => r.max)) === "20000", "curse: the number slider goes to 20,000");
+  await consistent(c, "curse", "curse summaries");
+  // changing a slider alone starts nothing: Run glows and waits to be pressed
+  await setKnobOnly(c, 0, 3000); await c.waitForTimeout(1500);
+  const waiting = await c.evaluate(() => ({ running, nudge: document.getElementById("run").classList.contains("nudge"),
+    status: document.getElementById("status-text").textContent, code: document.getElementById("code").value.includes(": top 3000 ;") }));
+  expect(!waiting.running && waiting.nudge && waiting.code && waiting.status.includes("press Run"), `curse: a slider change waits for Run (${JSON.stringify(waiting)})`);
+  await c.click("#run"); await idle(c);
+  expect(!(await c.$eval("#run", (b) => b.classList.contains("nudge"))), "curse: Run stops glowing once pressed");
+  expect(await c.$eval("#count", (e) => e.textContent) === "39", "curse: the run uses the new slider value (39 cursed up to 3000)");
+  // typing in the code doesn't start a hunt either
+  await c.$eval("#code", (t) => { t.value = t.value.replace(": top 3000 ;", ": top 30 ;"); t.dispatchEvent(new Event("input")); });
+  await c.waitForTimeout(1000);
+  expect(!(await c.evaluate(() => running)) && await c.$eval("#run", (b) => b.classList.contains("nudge")), "curse: typing waits for Run");
+
+  // thousands of catches: once the hunt is done they are all counted within seconds, not minutes
+  await setKnobOnly(c, 0, 20000); await setKnob(c, 1, 10);
+  await c.waitForFunction(() => ready && !running && document.getElementById("run").textContent === "Run", null, { timeout: 600000 });
+  await c.waitForFunction(() => catchQueue.length === 0, null, { timeout: 8000 }).catch(() => {});
+  const tally = await c.evaluate(() => ({ queue: catchQueue.length, count: +document.getElementById("count").textContent.replace(/,/g, ""),
+    printed: (document.getElementById("out").textContent.match(/^\d+ is cursed/gm) || []).length }));
+  expect(tally.queue === 0 && tally.count === tally.printed && tally.count > 500,
+    `curse: big hunt counted at once (${JSON.stringify(tally)})`);
+  await idle(c);
+  await consistent(c, "curse", "after a big curse hunt");
+
+  // a long hunt shows "Still hunting"; once it is done the note must be gone from the screen
+  await setKnobOnly(c, 0, 20000); await setKnob(c, 1, 200);
+  await c.waitForFunction(() => document.getElementById("caption").textContent.startsWith("Still hunting") && !document.getElementById("callout").hidden, null, T);
+  await idle(c);
+  expect(!(await c.isVisible("#callout")), "curse: the Still hunting note is off the screen when the long hunt is done");
+  await consistent(c, "curse", "after a long curse hunt");
 
   await browser.close();
   if (failures) { console.log(`${failures} of ${checks} checks failed`); process.exit(1); }

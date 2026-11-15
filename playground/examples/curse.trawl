@@ -42,9 +42,9 @@
     dup 4 dig > if 4 bury dup 5 bury else drop then
   then
   1 + dup top > 0 = ] drop drop
-5 dig . ." broke free after " 4 dig . ." flips: the toughest escape" 10 emit
+." = " 5 dig . ." broke free after " 4 dig . ." flips: the toughest escape" 10 emit
 1 dig if
-  1 dig dup . 1 = if ." cursed family, started by:" else ." cursed families, started by:" then
+  ." = " 1 dig dup . 1 = if ." cursed family, started by:" else ." cursed families, started by:" then
   32 emit 1 1 [ drop dup -100 swap - dig . 1 + dup 1 dig > 0 = ] drop drop 10 emit
   ." Tested every number up to " top . ." and found " 6 dig . ." cursed numbers: those families and their copycats" 10 emit
 else
