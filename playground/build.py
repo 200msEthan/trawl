@@ -30,7 +30,7 @@ EXAMPLES = [
     ("collatz", "Collatz records",
      "Halve even numbers, turn odd n into 3n + 1, and count the steps down to 1. This hunt catches every "
      "starting number that takes longer than all the smaller ones. Nobody has proved every number reaches 1.",
-     "drag the slider to test more numbers. Bigger hunts take longer."),
+     "drag the slider, then press Run. Bigger hunts take longer."),
     ("curse", "The 196 curse",
      "Flip a number's digits and add: 196 + 691 = 887. Keep going and most numbers soon read the same both "
      "ways, like 121. Nobody knows if 196 ever does. This hunt catches every number still cursed after the flips.",
@@ -64,7 +64,7 @@ EXAMPLES = [
     ("stuck", "A loop that is proven stuck",
      "This loop never changes anything. Instead of hanging forever, Trawl sees the exact same state come back "
      "and stops with a proof that it can never end.",
-     "change 5 drop to 1 + so the loop changes something (then press Stop)."),
+     "change 5 drop to 1 + so the loop changes something, press Run, then Stop."),
     ("a343507", "OEIS A343507 by brute force",
      "For each n, the least k where ((k+n)!)^2 divides (2k)!. This is the sequence behind Erdős problem 727. "
      "The playground finds a(2) by checking every k. The fast search that found new terms is in examples/.",
@@ -77,7 +77,7 @@ EXAMPLES = [
 # knobs: big numbers to change without touching the code. (label, the code around the number with
 # "#" in its place, lowest, highest, step)
 KNOBS = {
-    "curse": [("Test every number up to", ": top # ;", 100, 5000, 100), ("Flips before giving up", ": limit # ;", 10, 200, 10)],
+    "curse": [("Test every number up to", ": top # ;", 500, 20000, 500), ("Flips before giving up", ": limit # ;", 10, 200, 10)],
     "collatz": [("Test every number up to", "dup # <", 1000, 100000, 1000)],
     "hello": [("2 to the power", "# dup 2 swap power", 1, 3000, 1)],
     "rivers": [("Start the river at", "# 1 1 [", 1, 500, 1), ("How many stops", "dup # <", 2, 300, 1)],

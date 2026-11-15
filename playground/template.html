@@ -34,6 +34,10 @@ button { cursor: pointer; }
 button:hover, select:hover { border-color: var(--edge-strong); }
 button.primary { background: var(--sonar); color: #04201f; border-color: var(--sonar); font-weight: 650; padding: 8px 18px; }
 button.primary.stop { background: var(--warm); border-color: var(--warm); }
+/* the numbers changed since the last run: Run glows until it is pressed */
+button.primary.nudge { animation: nudge 1.4s ease-in-out infinite; }
+@keyframes nudge { 50% { box-shadow: 0 0 0 4px rgba(127, 220, 208, .45), 0 0 22px rgba(127, 220, 208, .55); } }
+@media (prefers-reduced-motion: reduce) { button.primary.nudge { animation: none; box-shadow: 0 0 0 3px rgba(127, 220, 208, .6); } }
 button:disabled { opacity: .6; cursor: default; }
 :focus-visible { outline: 2px solid var(--sonar); outline-offset: 2px; }
 
@@ -44,7 +48,7 @@ button:disabled { opacity: .6; cursor: default; }
 .callout p.out { opacity: 0; }
 .callout p b { color: var(--sonar); font-weight: 600; }
 .callout button { min-height: 30px; padding: 3px 10px; font-size: 12px; color: var(--muted); }
-.callout button[hidden] { display: none; }
+.callout[hidden], .callout button[hidden] { display: none; }
 .knobs { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 0; }
 .knobs:empty { display: none; }
 .knob { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; }
@@ -171,7 +175,7 @@ footer code { font-family: var(--mono); color: var(--muted); }
     <button id="run" class="primary" disabled>Diving…</button>
   </header>
 
-  <p class="tag">Trawl hunts for numbers that fit a rule. <em>Change a number and watch.</em></p>
+  <p class="tag">Trawl hunts for numbers that fit a rule. <em>Change a number, press Run, and watch.</em></p>
 
   <main class="deck">
     <div class="about" id="about"><h2 id="about-title"></h2><p id="about-text"></p><p class="try" id="about-try"></p></div>
@@ -184,7 +188,7 @@ footer code { font-family: var(--mono); color: var(--muted); }
       <div class="callout" id="callout" aria-live="polite"><p id="caption">Loading the hunter…</p><button id="skip">Skip</button></div>
       <div class="knobs" id="knobs"></div>
       <div class="counter"><strong id="count">0</strong><span id="count-label">catches</span><span id="now" class="now"></span></div>
-      <ol id="catches" aria-live="polite" data-empty="Every line the program prints that starts with a number shows up here as a catch."></ol>
+      <ol id="catches" aria-live="polite" data-empty="Every line the program prints that starts with a number shows up here as a catch. Start a line with = to show it as a summary instead."></ol>
       <div class="alert" id="alert" role="alert" hidden></div>
       <details class="log" open><summary>Everything it printed</summary><pre id="out"></pre></details>
       <a class="jump" href="#code-panel">See the code ↓</a>
@@ -473,7 +477,9 @@ function fillSay(el, text) {
   el.append(text.slice(pos));
 }
 function addCatch(line, label) {
-  const m = line.match(/^\s*(?:[A-Za-z]\w{0,3} = )?(-?\d+)/);
+  // a line that starts with "= " is a summary: shown as a highlighted card, not counted as a catch
+  if (!label && SUMMARY.test(line)) { line = line.replace(SUMMARY, ""); label = "Summary"; }
+  const m = line.match(CATCH);
   if (!m) return false;
   const n = m[1];
   if (!label) setCount(count + 1);
@@ -509,7 +515,21 @@ function takeOutput(text) {
 function finishLine() { if (lineBuf) { catchQueue.push(lineBuf); lineBuf = ""; } }
 // catches surface one at a time, so a burst of early finds still reads as separate pings
 const catchQueue = [];
+// a hunt can print thousands of catches faster than they can surface one by one, and only the newest
+// 40 cards stay on screen anyway: so when the queue backs up, count the older ones at once, quietly
+const SUMMARY = /^\s*= /, CATCH = /^\s*(?:[A-Za-z]\w{0,3} = )?(-?\d+)/;
+function fastForward(k) {
+  const keep = [];
+  let caught = 0;
+  for (const line of catchQueue.splice(0, k)) {
+    if (SUMMARY.test(line)) keep.push(line); // summaries always get their card
+    else if (CATCH.test(line)) caught++;
+  }
+  if (caught) setCount(count + caught);
+  catchQueue.unshift(...keep);
+}
 setInterval(() => {
+  if (catchQueue.length > 60) fastForward(catchQueue.length - 40);
   const n = catchQueue.length > 30 ? 4 : catchQueue.length > 10 ? 2 : 1;
   for (let i = 0; i < n && catchQueue.length; ) if (addCatch(catchQueue.shift())) i++; // lines without a catch don't wait their turn
 }, 150);
@@ -555,7 +575,7 @@ function endIntro() {
   if (!intro.on) return;
   intro.on = false; intro.queue.length = 0;
   $("skip").hidden = true;
-  caption("<b>Your turn.</b> Change a number and watch what it catches.");
+  caption("<b>Your turn.</b> Change a number, then press Run to see what it catches.");
   intro.justEnded = true;
   reveal();
 }
@@ -569,7 +589,7 @@ function introStart() {
 function introCatch() {
   if (intro.caught) return; intro.caught = true;
   say("<b>Each ping is a record:</b> a number that takes longer to reach 1 than any number before it.", 5200);
-  say("<b>Drag the slider</b> to test more numbers. The hunt starts over.", 4800);
+  say("<b>Drag the slider</b> to test more numbers, then press <b>Run</b>.", 4800);
 }
 function introDone() {
   say(() => { caption("This kind of hunt also found <b>three numbers no one had ever published</b>, for an unsolved puzzle by the mathematician Paul Erdős."); climax(); }, 7000);
@@ -646,6 +666,7 @@ function runProgram() {
   }
   if (!intro.on && !intro.justEnded) $("callout").hidden = true; // the tour is over: give the space to the catches
   intro.justEnded = false;
+  runBtn.classList.remove("nudge");
   resetView();
   running = true; runBtn.textContent = "Stop"; runBtn.classList.add("stop");
   setStatus("hunting…", "busy");
@@ -675,7 +696,7 @@ function showAbout(ex) {
   }
 }
 /* knobs: the numbers worth changing, as big controls. Changing one rewrites the program and hunts again. */
-let knobs = [], knobTimer = 0;
+let knobs = [];
 function knobRegex(pat) { return new RegExp(pat.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("#", "(-?\\d+)")); }
 function renderKnobs(ex) {
   const box = $("knobs"); box.textContent = ""; knobs = [];
@@ -695,7 +716,7 @@ function renderKnobs(ex) {
       code.value = code.value.replace(re, () => pat.replace("#", String(v)));
       flashKnobs(false);
       row.classList.add("pulse"); setTimeout(() => row.classList.remove("pulse"), 400);
-      clearTimeout(knobTimer); knobTimer = setTimeout(rerun, now ? 0 : 450);
+      changed();
     };
     range.addEventListener("input", () => set(+range.value));
     less.addEventListener("click", () => set(+range.value - step, true));
@@ -730,6 +751,13 @@ function syncKnobs() { // the code was edited by hand: show its numbers, or hide
     k.row.hidden = !m;
     if (m) { k.range.value = m[1]; k.outEl.textContent = Number(m[1]).toLocaleString("en-US"); }
   }
+}
+// changing a number never starts a hunt by itself (it used to restart on every step of a slider):
+// Run glows and the status says so, until Run is pressed
+function changed() {
+  if (intro.on) endIntro();
+  runBtn.classList.add("nudge");
+  if (!running) setStatus("changed: press Run to hunt with the new numbers", "busy");
 }
 function rerun() {
   if (intro.on) endIntro();
@@ -768,7 +796,7 @@ function loadFromHash() {
   loadExample(ex);
   if (ex !== EXAMPLES[0]) endIntro(); // the tour is about the first example; a link to another one skips it
 }
-code.addEventListener("input", () => { syncKnobs(); paintCode(); });
+code.addEventListener("input", () => { syncKnobs(); paintCode(); changed(); });
 code.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); runProgram(); }
   else if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); code.setRangeText("  ", code.selectionStart, code.selectionEnd, "end"); }

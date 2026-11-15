@@ -10,7 +10,8 @@ which is Python compiled to WebAssembly. Nothing gets installed, and no server r
 - **Rebuild it** after changing the interpreter, a library or an example:
   `python playground/build.py`. The page embeds those files, and a test fails if it's out of date.
 
-Programs run in a background worker. **Stop** ends a run right away, and the step limit
+Every printed line that starts with a number shows up as a catch; a line that starts with `= ` shows as a
+highlighted summary card instead, and isn't counted. Programs run in a background worker. **Stop** ends a run right away, and the step limit
 (20 million) and output limit (500,000 characters) keep a runaway program from freezing the tab.
 The playground is the interpreter, so it is much slower than `trawl fast`. For real searches,
 install Trawl.

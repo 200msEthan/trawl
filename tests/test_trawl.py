@@ -546,13 +546,13 @@ def test_playground_196_curse_catches_and_now_at():
     sea = Watch()
     lines = sea.run(parse(src)).splitlines()
     catches = [ln for ln in lines if re.match(r"^\s*(?:[A-Za-z]\w{0,3} = )?(-?\d+)", ln)]
-    # the 13 known Lychrel candidates below 1000 (OEIS A023108), then the toughest escape (89, 24 flips)
-    assert [int(c.split()[0]) for c in catches] == [196, 295, 394, 493, 592, 689, 691, 788, 790, 879, 887, 978, 986, 89, 2]
+    # the 13 known Lychrel candidates below 1000 (OEIS A023108) are the catches; summaries start with "= "
+    assert [int(c.split()[0]) for c in catches] == [196, 295, 394, 493, 592, 689, 691, 788, 790, 879, 887, 978, 986]
     # copycats: only 196 and 879 start their own family below 1000 (Lychrel seeds, OEIS A063048)
     assert [c.split()[0] for c in catches if "new family" in c] == ["196", "879"]
     assert "978 is cursed, a copycat of 879 " in lines
-    assert lines[-3] == "89 broke free after 24 flips: the toughest escape"
-    assert lines[-2] == "2 cursed families, started by: 196 879 "
+    assert lines[-3] == "= 89 broke free after 24 flips: the toughest escape"
+    assert lines[-2] == "= 2 cursed families, started by: 196 879 "
     assert lines[-1] == "Tested every number up to 1000 and found 13 cursed numbers: those families and their copycats"
     # "now at" must show the number being tested, never the huge number it grows into
     assert max(sea.bottoms) <= 1001
