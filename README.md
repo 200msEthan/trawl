@@ -50,8 +50,8 @@ Their C searches found three more terms, and each was checked again with separat
 | a(11) | 91328826321 | yes | yes, in 33 minutes |
 | a(12) | 1490709825264 | yes | not run yet |
 
-**These terms are not in the OEIS yet.** They have not been submitted or reviewed, so treat
-them as found and double-checked, not accepted.
+**These terms are not in the OEIS yet.** They have been submitted and are waiting for an
+OEIS editor's review, so treat them as found and double-checked, not accepted.
 
 Trawl is Tide grown into a real language: a written spec, a test suite, a standard library
 and a native compiler. The search in [examples/a343507.trawl](examples/a343507.trawl) finds

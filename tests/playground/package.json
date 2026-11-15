@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "description": "Browser tests for the playground",
+  "scripts": { "test": "node state.test.js" },
+  "devDependencies": { "playwright": "1.63.0" }
+}
