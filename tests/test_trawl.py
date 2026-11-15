@@ -560,9 +560,14 @@ def test_playground_196_curse_catches_and_now_at():
 
 # ---------------------------------------------------------------- receipts
 
-def trawl_cli(*args, cwd=None):
+def trawl_cli(*args, cwd=None, progress=None):
+    env = {**os.environ, "PYTHONPATH": str(ROOT), "PYTHONIOENCODING": "utf-8"}
+    env.pop("TRAWL_PROGRESS", None)
+    if progress is not None:
+        env["TRAWL_PROGRESS"] = progress  # "1" acts as if stderr were a terminal
+        env["TRAWL_PROGRESS_AFTER"] = "0.05"  # and the line shows after 0.05 s of quiet, not 1 s
     return subprocess.run([sys.executable, "-m", "trawl", *args], capture_output=True, text=True, encoding="utf-8",
-                          timeout=600, cwd=cwd, env={**os.environ, "PYTHONPATH": str(ROOT), "PYTHONIOENCODING": "utf-8"})
+                          timeout=600, cwd=cwd, env=env)
 
 
 def test_receipt_from_the_interpreter_verifies(tmp_path):
@@ -616,3 +621,63 @@ def test_receipt_of_a_saved_sweep_spot_checks_blocks(tmp_path):
     rec.write_text(json.dumps(data), encoding="utf-8")
     r = trawl_cli("verify", str(rec), "--save", str(bad), "--sample", "256")
     assert r.returncode == 1 and "saved count 2, re-run count 1" in r.stdout, r.stdout
+
+
+# ---------------------------------------------------------------- the "still running" line
+
+# about a second on the interpreter, quiet in the middle
+SLOW_PROG = '." start" 10 emit\n0 700000 [ swap 1 + swap 1 - ] drop . 10 emit ." end" 10 emit\n'
+SLOW_OUT = "start\n700000 \nend\n\n"
+
+
+def test_a_quiet_run_shows_it_is_still_running_on_stderr_only(tmp_path):
+    prog = tmp_path / "slow.trawl"
+    prog.write_text(SLOW_PROG, encoding="utf-8")
+    rec = tmp_path / "slow.receipt"
+    r = trawl_cli("run", str(prog), "--max-steps", "100000000", "--receipt", str(rec), progress="1")
+    assert r.returncode == 0, r.stderr
+    assert "still running... 0:0" in r.stderr and "(Ctrl+C stops it)" in r.stderr and "~ done in 0:0" in r.stderr, r.stderr
+    assert r.stdout == SLOW_OUT  # stdout is only what the program printed
+    import json
+    data = json.loads(rec.read_text(encoding="utf-8"))
+    assert data["output"]["head"] == SLOW_OUT  # and so is the receipt
+    # verify's re-run is silent, so it says it is still checking, and says how long the first run took
+    r = trawl_cli("verify", str(rec), "--engine", "run", "--max-steps", "100000000", progress="1")
+    assert r.returncode == 0 and "✓" in r.stdout and "re-running it on the reference interpreter" in r.stdout, r.stdout
+    assert "still checking... 0:0" in r.stderr and "still" not in r.stdout, r.stderr
+    # piped into a file (no terminal), nothing extra is printed
+    r = trawl_cli("run", str(prog), "--max-steps", "100000000")
+    assert r.returncode == 0 and r.stdout == SLOW_OUT and r.stderr == "", r.stderr
+
+
+def test_the_running_line_is_wiped_before_output_and_never_splits_a_line(monkeypatch):
+    import io
+    import time
+    from trawl import progress
+    monkeypatch.setenv("TRAWL_PROGRESS_AFTER", "0.05")
+    out, err = io.StringIO(), io.StringIO()
+    t = progress.Ticker("still running", err=err, out=out, enabled=True)
+    t.shared = True  # stdout and stderr on the same screen
+    with t:
+        t.write("half a line")
+        time.sleep(0.6)
+        drawn = err.getvalue()
+        t.write(" and the rest\n")
+        time.sleep(0.6)
+    assert out.getvalue() == "half a line and the rest\n"
+    assert drawn.startswith("\n\r") and "still running... 0:00" in drawn, repr(drawn)  # a new line first
+    e = err.getvalue()
+    assert e.endswith("\r") and e.rstrip("\r").endswith(" " * 10), repr(e[-60:])  # wiped when done
+    assert t.drawn == 0
+    assert progress.clock(3725) == "1:02:05" and progress.clock(125) == "2:05"
+    from trawl.receipt import first_took
+    assert first_took({"engine": "run", "seconds": 125.3}) == " (the first run, with trawl run, took 2:05)"
+    assert first_took({"engine": "fast", "seconds": 0.2}) == ""
+
+
+@needs_cc
+def test_fast_with_the_running_line_prints_the_same(tmp_path):
+    prog = tmp_path / "seven.trawl"
+    prog.write_text(SWEEP_PROG, encoding="utf-8")
+    r = trawl_cli("fast", str(prog), progress="1")
+    assert r.returncode == 0 and r.stdout == interp(SWEEP_PROG) and "~ done in" in r.stderr, r.stderr

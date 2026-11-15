@@ -31,19 +31,30 @@ def exe_name(path):
 
 def cmd_run(args):
     from .interp import run
+    from .progress import Ticker
     if args.receipt:
         from .receipt import Tee, program_files, write_receipt
         prog, files, main = program_files(args.file)
         real, t0 = sys.stdout, time.time()
-        sys.stdout = tee = Tee(real)
+        tee = Tee(real)
+        with Ticker(out=tee) as ticker:
+            sys.stdout = ticker if ticker.enabled else tee
+            try:
+                _run_and_print(run, prog, args)
+            finally:
+                sys.stdout = real
+        write_receipt(args.receipt, files=files, main=main, engine="run", output=tee.data(), seconds=time.time() - t0)
+        ticker.done()
+        print(f"~ receipt written to {args.receipt}", file=sys.stderr)
+        return
+    prog, real = load(args.file), sys.stdout
+    with Ticker() as ticker:
+        sys.stdout = ticker if ticker.enabled else real
         try:
             _run_and_print(run, prog, args)
         finally:
             sys.stdout = real
-        write_receipt(args.receipt, files=files, main=main, engine="run", output=tee.data(), seconds=time.time() - t0)
-        print(f"~ receipt written to {args.receipt}", file=sys.stderr)
-        return
-    _run_and_print(run, load(args.file), args)
+    ticker.done()
 
 
 def _run_and_print(run, prog, args):
@@ -84,16 +95,26 @@ def cmd_fast(args):
             extra += ["--jobs", str(args.jobs)]
         if args.save:
             extra += ["--save", os.path.abspath(args.save)]
-        if not args.receipt:
-            sys.exit(subprocess.call([exe] + extra))
+        from .progress import Ticker
         from .receipt import run_native_teed, write_receipt
+        ticker = Ticker()
+        if not args.receipt:
+            if not ticker.enabled:
+                sys.exit(subprocess.call([exe] + extra))
+            with ticker:
+                code, _ = run_native_teed([exe] + extra, ticker=ticker, keep=False)
+            if code == 0:
+                ticker.done()
+            sys.exit(code)
         t0 = time.time()
-        code, output = run_native_teed([exe] + extra)
+        with ticker:
+            code, output = run_native_teed([exe] + extra, ticker=ticker if ticker.enabled else None)
         if code != 0:
             print("~ no receipt: the run stopped with an error", file=sys.stderr)
             sys.exit(code)
         write_receipt(args.receipt, files=files, main=main, engine="fast", output=output, seconds=time.time() - t0,
                       jobs=args.jobs, save=args.save)
+        ticker.done()
         print(f"~ receipt written to {args.receipt}", file=sys.stderr)
 
 
@@ -173,6 +194,10 @@ def main(argv=None):
         sys.exit(f"~ {e}")
     except OSError as e:
         sys.exit(f"~ {e}")
+    except KeyboardInterrupt:
+        sys.stdout.flush()
+        print("\n~ stopped (Ctrl+C)", file=sys.stderr)
+        sys.exit(130)
 
 
 if __name__ == "__main__":
