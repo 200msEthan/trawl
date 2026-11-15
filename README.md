@@ -26,6 +26,7 @@ $ trawl run rivers.trawl
 ```
 
 `trawl fast rivers.trawl` prints the same thing, compiled to machine code first.
+Or skip the install: download [playground/index.html](playground/index.html) and open it in a browser. It runs Trawl right in the page.
 You need Python 3.10 or newer, and gcc or clang for `trawl fast` and `trawl build`
 (on Windows: [w64devkit](https://github.com/skeeto/w64devkit) or MSYS2). Typing `trawl`
 alone opens an interactive prompt.
@@ -52,7 +53,9 @@ them as found and double-checked, not accepted.
 
 Trawl is Tide grown into a real language: a written spec, a test suite, a standard library
 and a native compiler. The search in [examples/a343507.trawl](examples/a343507.trawl) finds
-a(10) and a(11) on its own. On the same slice of the search, it runs about 3 times slower
+a(10) and a(11) on its own. The open problem itself is in
+[examples/erdos727](examples/erdos727): Johan Land's k = 3 family and a k = 4 family found by
+a research Claude (a lead, not a proof). On the same slice of the search, it runs about 3 times slower
 than the hand-written C, 8 times faster than plain Python, and 170 times faster than the
 original Tide engine ([docs/BENCHMARK.md](docs/BENCHMARK.md)). Every old Tide program
 still runs and prints exactly what it printed before.

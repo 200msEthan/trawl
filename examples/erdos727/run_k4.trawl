@@ -1,0 +1,4 @@
+# Search the k=4 family n = 8t^4 - 18t^2 + 6 for t below 2000.
+# trawl fast run_k4.trawl  (about a second; trawl run takes a few minutes)
+use quartic_k4
+2 2000 hunt

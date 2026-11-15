@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trawl Playground</title>
+<meta name="description" content="Write and run Trawl, a small language for hunting patterns in the integers, right in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e5a6b'/%3E%3Cpath d='M5 13c3-3 5-3 8 0s5 3 8 0 5-3 6-1M5 20c3-3 5-3 8 0s5 3 8 0 5-3 6-1' stroke='%23e8f4f2' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f6f4ef; --panel: #fffdf8; --ink: #1d2a2e; --muted: #5d6b6f; --line: #ddd8cc;
+  --accent: #0e5a6b; --accent-ink: #ffffff; --accent-soft: #e2eff0; --err: #a3341f; --ok: #2f6b3a;
+  --code-bg: #fffdf8; --shadow: 0 1px 2px rgba(20,30,30,.06), 0 4px 16px rgba(20,30,30,.05);
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1719; --panel: #152023; --ink: #e3ecea; --muted: #93a5a6; --line: #26363a;
+    --accent: #5cc0c9; --accent-ink: #082024; --accent-soft: #1b3236; --err: #f08a74; --ok: #8fd19b;
+    --code-bg: #121c1f; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1719; --panel: #152023; --ink: #e3ecea; --muted: #93a5a6; --line: #26363a;
+  --accent: #5cc0c9; --accent-ink: #082024; --accent-soft: #1b3236; --err: #f08a74; --ok: #8fd19b;
+  --code-bg: #121c1f; --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+a { color: var(--accent); }
+header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+.brand h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+.brand span { color: var(--muted); font-size: 13px; }
+select, button { font: inherit; font-size: 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 7px 10px; min-height: 38px; }
+button { cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 7px 16px; }
+button:disabled { opacity: .55; cursor: default; }
+button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px; min-height: 0; }
+.pane { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); min-height: 0; overflow: hidden; }
+.pane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.pane-head b { color: var(--ink); font-weight: 600; }
+textarea, pre { font: 14px/1.6 var(--mono); margin: 0; padding: 14px 16px; flex: 1; min-height: 0; }
+textarea { width: 100%; border: 0; resize: none; background: var(--code-bg); color: var(--ink); tab-size: 2; min-height: 320px; }
+pre { overflow: auto; white-space: pre-wrap; word-break: break-word; background: var(--code-bg); min-height: 200px; }
+pre .err { color: var(--err); }
+pre .note { color: var(--muted); }
+#status { font-size: 13px; color: var(--muted); min-height: 20px; }
+#status.ok { color: var(--ok); }
+#status.err { color: var(--err); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+.busy .dot { background: var(--accent); animation: pulse 1s infinite ease-in-out; }
+@keyframes pulse { 50% { opacity: .3; } }
+.cheat { padding: 0 20px 18px; color: var(--muted); font-size: 13px; }
+.cheat details { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.cheat summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+.cheat table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+.cheat td { padding: 4px 8px 4px 0; vertical-align: top; border-top: 1px solid var(--line); }
+.cheat code { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+footer { padding: 0 20px 20px; color: var(--muted); font-size: 13px; }
+kbd { font: 12px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+@media (max-width: 760px) {
+  header { padding: 12px 16px; gap: 8px; }
+  .brand { width: 100%; }
+  main { grid-template-columns: 1fr; padding: 12px 16px; gap: 12px; }
+  textarea { min-height: 220px; font-size: 14px; }
+  .cheat, footer { padding-left: 16px; padding-right: 16px; }
+  #examples { flex: 1; min-width: 0; }
+  .hide-sm { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><h1>Trawl</h1><span>playground · v0.1.0</span></div>
+  <select id="examples" aria-label="Load an example"></select>
+  <button id="share" title="Copy a link to this program">Copy link</button>
+  <button id="run" class="primary" disabled>Loading…</button>
+</header>
+
+<main>
+  <section class="pane">
+    <div class="pane-head"><b>Program</b><span class="hide-sm"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs it</span></div>
+    <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Trawl program"></textarea>
+  </section>
+  <section class="pane">
+    <div class="pane-head"><b>Output</b><span id="status"><span class="dot"></span>starting the interpreter…</span></div>
+    <pre id="out" aria-live="polite"></pre>
+  </section>
+</main>
+
+<div class="cheat">
+  <details>
+    <summary>Quick reference</summary>
+    <table>
+      <tr><td><code>2 3 + .</code></td><td>numbers go on a stack, words take from it: prints 5. Also <code>- * / % power</code>, <code>= &lt; &gt;</code></td></tr>
+      <tr><td><code>dup drop swap over rot</code></td><td>move numbers around on the stack</td></tr>
+      <tr><td><code>: sq dup * ;</code></td><td>define your own word</td></tr>
+      <tr><td><code>c if A else B then</code></td><td>run A when c is not 0, otherwise B</td></tr>
+      <tr><td><code>[ A ]</code></td><td>loop: run A while the top of the stack is not 0</td></tr>
+      <tr><td><code>1234 10 digsum</code></td><td>digit sum in any base (<code>altsum</code>: units − tens + hundreds …)</td></tr>
+      <tr><td><code>42 7 bury · 7 dig</code></td><td>the seabed: numbered memory cells, all 0 at the start</td></tr>
+      <tr><td><code>lo hi echo</code></td><td>have cells lo..hi looked like this before? gives how many echoes ago, or 0</td></tr>
+      <tr><td><code>1 9 wave · want · more · aim</code></td><td>guess a number, rewind when it's wrong, keep every answer, keep the best</td></tr>
+      <tr><td><code>. emit ." text" .s</code></td><td>print a number, a character, text, the stack</td></tr>
+      <tr><td><code>use stdlib</code></td><td>libraries: <code>stdlib</code>, <code>numbers</code>, <code>orbits</code></td></tr>
+    </table>
+  </details>
+</div>
+
+<footer>
+  This runs Trawl's reference interpreter in your browser, so it checks for stuck loops but is much slower than
+  <code>trawl fast</code>. For long searches, install Trawl and compile to native code.
+  Read the <a href="https://github.com/connabyss/trawl/blob/main/docs/SPEC.md">language spec</a> or the
+  <a href="https://github.com/connabyss/trawl">code on GitHub</a>.
+</footer>
+
+<script>
+const PY = {"trawl/__init__.py": "\"\"\"Trawl: a small language for hunting patterns in the integers.\"\"\"\n__version__ = \"0.1.0\"\n", "trawl/lang.py": "\"\"\"Reading Trawl source: tokens, the syntax tree, and the list of built-in words.\n\nTrawl reads exactly like the Tide programs it grew out of, so every old .tide file\nstill means the same thing. The tree is shared by the reference interpreter\n(trawl/interp.py) and the native compiler (trawl/cgen.py).\n\"\"\"\nimport difflib\nimport os\nimport re\nfrom dataclasses import dataclass, field\n\n# Every built-in word, grouped the way the spec (docs/SPEC.md) lists them.\nARITH = [\"+\", \"-\", \"*\", \"/\", \"%\", \"=\", \"<\", \">\"]\nSTACK = [\"dup\", \"drop\", \"swap\", \"over\", \"rot\", \"fold\", \"depth\"]\nOUTPUT = [\".\", \"emit\", \".s\", \".bed\", \".pearls\"]\nSEABED = [\"bury\", \"dig\", \"drain\"]\nNUMBERS = [\"digsum\", \"altsum\", \"power\"]\nECHO = [\"echo\", \"hush\"]\nWORLDS = [\"wave\", \"want\", \"more\", \"aim\", \"worlds\"]\nSYNTAX = [\"if\", \"else\", \"then\", \"[\", \"]\", \":\", \";\", \"use\", \"pearl\"]\nBUILTINS = ARITH + STACK + OUTPUT + SEABED + NUMBERS + ECHO + WORLDS + SYNTAX\n\n# How many numbers each word takes off the stack (for error messages and the compiler).\nWANTS = {**{w: 2 for w in ARITH}, \"dup\": 1, \"drop\": 1, \"swap\": 2, \"over\": 2, \"rot\": 3,\n         \".\": 1, \"emit\": 1, \"bury\": 2, \"dig\": 1, \"digsum\": 2, \"altsum\": 2, \"power\": 2,\n         \"echo\": 2, \"wave\": 2, \"want\": 1, \"aim\": 1, \"if\": 1}\n\nEXTENSIONS = (\".trawl\", \".tide\")\nLIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), \"lib\")\n\n\nclass TrawlError(Exception):\n    \"\"\"Something the sea refuses. The message is meant for a person.\"\"\"\n\n\n@dataclass\nclass Tok:\n    text: str\n    line: int\n    file: str\n\n\n@dataclass\nclass Num:\n    value: int\n    tok: Tok\n\n\n@dataclass\nclass Word:\n    name: str\n    tok: Tok\n\n\n@dataclass\nclass Text:\n    text: str\n    tok: Tok\n\n\n@dataclass\nclass If:\n    then: list\n    other: list  # None when there is no else\n    tok: Tok\n\n\n@dataclass\nclass Loop:\n    body: list\n    tok: Tok\n\n\n@dataclass\nclass Def:\n    name: str\n    body: list\n    tok: Tok\n\n\n@dataclass\nclass PearlDecl:\n    name: str\n    tok: Tok\n\n\n@dataclass\nclass Program:\n    body: list\n    defs: list = field(default_factory=list)  # every Def, in the order they appear\n\n\nNUMBER = re.compile(r\"[+-]?\\d+(?:_\\d+)*\\Z\")\n\n\ndef tokens(src, file=\"<program>\"):\n    \"\"\"Split source into tokens. `#` starts a comment, except on a line that also holds `.\"` text.\"\"\"\n    src = \"\\n\".join(line.split(\"#\", 1)[0] if '.\"' not in line else line for line in src.splitlines())\n    out = []\n    for m in re.finditer(r'\\.\"[^\"]*\"|\\S+', src):\n        out.append(Tok(m.group(), src.count(\"\\n\", 0, m.start()) + 1, file))\n    return out\n\n\ndef where(tok):\n    return f\"{os.path.basename(tok.file)}:{tok.line}\"\n\n\ndef find_lib(name, search):\n    for d in search:\n        for ext in EXTENSIONS:\n            p = os.path.join(d, name + ext)\n            if os.path.isfile(p):\n                return p\n    return None\n\n\ndef expand(toks, search, depth=0):\n    \"\"\"Replace every `use name` with the tokens of name.trawl (or name.tide).\"\"\"\n    out, i = [], 0\n    while i < len(toks):\n        t = toks[i]\n        if t.text == \"use\":\n            if i + 1 >= len(toks):\n                raise TrawlError(f\"{where(t)}: `use` needs the name of a library after it\")\n            name = toks[i + 1].text\n            path = find_lib(name, search)\n            if path is None:\n                raise TrawlError(f\"{where(t)}: no library called `{name}` (looked for {name}.trawl and {name}.tide)\")\n            if depth > 50:\n                raise TrawlError(f\"{where(t)}: libraries keep using each other in a circle\")\n            here = [os.path.dirname(os.path.abspath(path))] + search\n            out += expand(tokens(open(path, encoding=\"utf-8\").read(), path), here, depth + 1)\n            i += 2\n        else:\n            out.append(t)\n            i += 1\n    return out\n\n\nclass Parser:\n    def __init__(self, toks):\n        self.toks, self.i, self.defs = toks, 0, []\n\n    def block(self, closers, opener=None):\n        body = []\n        while self.i < len(self.toks):\n            t = self.toks[self.i]\n            s = t.text\n            if s in closers:\n                return body, s\n            self.i += 1\n            if s == \":\":\n                body.append(self.definition(t))\n            elif s == \"[\":\n                inner, _ = self.block([\"]\"], t)\n                self.i += 1\n                body.append(Loop(inner, t))\n            elif s == \"if\":\n                then, end = self.block([\"else\", \"then\"], t)\n                self.i += 1\n                other = None\n                if end == \"else\":\n                    other, _ = self.block([\"then\"], t)\n                    self.i += 1\n                body.append(If(then, other, t))\n            elif s == \"pearl\":\n                if self.i >= len(self.toks):\n                    raise TrawlError(f\"{where(t)}: `pearl` needs the name of a word after it\")\n                body.append(PearlDecl(self.toks[self.i].text, t))\n                self.i += 1\n            elif s in (\"]\", \"else\", \"then\", \";\"):\n                raise TrawlError(f\"{where(t)}: a stray `{s}` with nothing open for it to close\")\n            elif s.startswith('.\"') and len(s) >= 3 and s.endswith('\"'):\n                body.append(Text(s[2:-1].lstrip(), t))\n            elif NUMBER.match(s):\n                body.append(Num(int(s), t))\n            else:\n                body.append(Word(s, t))\n        if opener is not None:\n            raise TrawlError(f\"{where(opener)}: a `{opener.text}` was opened and the sea never closed it\")\n        return body, None\n\n    def definition(self, colon):\n        if self.i >= len(self.toks):\n            raise TrawlError(f\"{where(colon)}: `:` needs a name and a body ending in `;`\")\n        name_tok = self.toks[self.i]\n        name = name_tok.text\n        if name in BUILTINS:\n            raise TrawlError(f\"{where(name_tok)}: `{name}` is a word of the sea itself. pick another name.\")\n        if NUMBER.match(name):\n            raise TrawlError(f\"{where(name_tok)}: `{name}` is a number, so it can't be a word's name\")\n        self.i += 1\n        body, end = self.block([\";\"])\n        if end is None:\n            raise TrawlError(f\"{where(colon)}: the definition of `{name}` never reached its `;`\")\n        self.i += 1\n        d = Def(name, body, colon)\n        self.defs.append(d)\n        return d\n\n\ndef parse(src, file=\"<program>\", search=None):\n    \"\"\"Source text -> Program. `search` lists folders for `use`; the program's folder and lib/ are added.\"\"\"\n    dirs = list(search or [])\n    if file and file != \"<program>\":\n        dirs.insert(0, os.path.dirname(os.path.abspath(file)))\n    dirs.append(LIB_DIR)\n    p = Parser(expand(tokens(src, file), dirs))\n    body, _ = p.block([])\n    return Program(body, p.defs)\n\n\ndef suggest(name, known):\n    near = difflib.get_close_matches(name, list(BUILTINS) + list(known), 1, 0.6)\n    return f\" did you mean `{near[0]}`?\" if near else \"\"\n", "trawl/interp.py": "\"\"\"The reference interpreter: slow, careful, and the definition of what Trawl means.\n\n`trawl run` uses it. It checks things the native build skips for speed:\n  - a loop that comes back to the exact same sea (stack + seabed) can never end,\n    so it stops with a proof instead of hanging\n  - a run longer than the step limit stops instead of running forever\nThe native compiler (trawl/cgen.py) must print exactly what this prints; the test\nsuite checks that on every program in examples/ and tests/programs/.\n\"\"\"\nimport sys\n\nif hasattr(sys, \"set_int_max_str_digits\"):\n    sys.set_int_max_str_digits(0)  # Trawl numbers can have any number of digits\n\nfrom .lang import (Def, If, Loop, Num, PearlDecl, Program, Text, TrawlError, WANTS, Word,\n                   parse, suggest)\n\n\nclass Sink(Exception):\n    \"\"\"This world is wrong. Rewind.\"\"\"\n\n\nclass Sea:\n    def __init__(self, tape=None, sunk=0, max_steps=50_000_000, stream=None):\n        self.stack, self.words, self.out, self.bed = [], {}, [], {}\n        self.steps, self.max_steps, self.stream = 0, max_steps, stream\n        self.tape, self.pos, self.sunk = ([] if tape is None else tape), 0, sunk\n        self.pearls, self.echoes, self.echo_n = {}, {}, 0\n\n    # -- small helpers\n    def pop(self, word, want=1):\n        if not self.stack:\n            raise TrawlError(f\"the tide went out too far: `{word}` wanted {want} number{'s' if want > 1 else ''}, the shore was empty\")\n        return self.stack.pop()\n\n    def say(self, text):\n        if self.stream is not None:\n            self.stream.write(text)\n            if \"\\n\" in text:\n                self.stream.flush()\n        else:\n            self.out.append(text)\n\n    @staticmethod\n    def show(v):\n        return str(v)\n\n    def zero(self, a):\n        raise TrawlError(f\"you tried to split {a} into zero pieces. the ocean refuses.\")\n\n    def digits(self, word, alternate):\n        base, x = self.pop(word, 2), self.pop(word, 2)\n        if base < 2:\n            raise TrawlError(f\"base {base} has no digits. try 2 or more.\")\n        total, sign, x = 0, 1, abs(x)\n        while x:\n            x, r = divmod(x, base)\n            total += sign * r\n            if alternate:\n                sign = -sign\n        self.stack.append(total)\n\n    # -- running\n    def run(self, prog):\n        self.exec(prog.body)\n        return \"\".join(self.out)\n\n    def exec(self, body):\n        st = self.stack\n        for node in body:\n            self.steps += 1\n            if self.steps > self.max_steps:\n                raise TrawlError(f\"the tide never went out: {self.max_steps // 1_000_000} million steps and still going\")\n            k = type(node)\n            if k is Num:\n                st.append(node.value)\n            elif k is Word:\n                self.word(node)\n            elif k is Loop:\n                self.loop(node)\n            elif k is If:\n                cond = self.pop(\"if\")\n                if cond:\n                    self.exec(node.then)\n                elif node.other is not None:\n                    self.exec(node.other)\n            elif k is Text:\n                self.say(node.text)\n            elif k is Def:\n                self.words[node.name] = node.body\n            elif k is PearlDecl:\n                self.pearls.setdefault(node.name, {})\n\n    def loop(self, node):\n        seen = set()\n        st = self.stack\n        while st and st[-1] != 0:\n            # The sea is deterministic: if a loop comes back to the exact same stack and\n            # seabed, it will repeat forever. Proof, not a guess.\n            if len(st) + len(self.bed) <= 256:\n                sea = (tuple(st), len(self.words), tuple(sorted(self.bed.items())))\n                if sea in seen:\n                    raise TrawlError(f\"the tide is stuck: this loop came back to the exact same sea {list(st)}, so it can never end\")\n                if len(seen) < 50_000:\n                    seen.add(sea)\n            self.exec(node.body)\n\n    def word(self, node):\n        t, st = node.name, self.stack\n        if t in self.words:\n            if t in self.pearls:\n                n, shell = self.pop(t), self.pearls[t]\n                if n in shell:\n                    st.append(shell[n])\n                else:\n                    st.append(n)\n                    self.exec(self.words[t])\n                    shell[n] = st[-1] if st else self.pop(t)\n            else:\n                self.exec(self.words[t])\n            return\n        if t in (\"+\", \"-\", \"*\", \"/\", \"%\", \"=\", \"<\", \">\"):\n            b, a = self.pop(t, 2), self.pop(t, 2)\n            if t == \"+\": st.append(a + b)\n            elif t == \"-\": st.append(a - b)\n            elif t == \"*\": st.append(a * b)\n            elif t == \"/\": st.append(a // b if b else self.zero(a))\n            elif t == \"%\": st.append(a % b if b else self.zero(a))\n            elif t == \"=\": st.append(int(a == b))\n            elif t == \"<\": st.append(int(a < b))\n            else: st.append(int(a > b))\n        elif t == \"dup\":\n            v = self.pop(t); st += [v, v]\n        elif t == \"drop\":\n            self.pop(t)\n        elif t == \"swap\":\n            b, a = self.pop(t, 2), self.pop(t, 2); st += [b, a]\n        elif t == \"over\":\n            b, a = self.pop(t, 2), self.pop(t, 2); st += [a, b, a]\n        elif t == \"rot\":\n            c, b, a = self.pop(t, 3), self.pop(t, 3), self.pop(t, 3); st += [b, c, a]\n        elif t == \"fold\":\n            st.reverse()\n        elif t == \"depth\":\n            st.append(len(st))\n        elif t == \".\":\n            self.say(self.show(self.pop(t)) + \" \")\n        elif t == \"emit\":\n            c = self.pop(t)\n            if not 0 <= c <= 0x10FFFF:\n                raise TrawlError(f\"emit wants a character number from 0 to 1114111, not {c}\")\n            self.say(chr(c))\n        elif t == \".s\":\n            self.say(\"<\" + \" \".join(map(str, st)) + \"> \")\n        elif t == \".bed\":\n            self.say(\"{\" + \" \".join(f\"{k}:{v}\" for k, v in sorted(self.bed.items())) + \"} \")\n        elif t == \".pearls\":\n            self.say(f\"({sum(map(len, self.pearls.values()))} pearls) \")\n        elif t == \"bury\":\n            addr, v = self.pop(t, 2), self.pop(t, 2)\n            if v == 0:\n                self.bed.pop(addr, None)\n            else:\n                self.bed[addr] = v\n        elif t == \"dig\":\n            st.append(self.bed.get(self.pop(t), 0))\n        elif t == \"drain\":\n            self.bed.clear()\n        elif t == \"digsum\":\n            self.digits(t, False)\n        elif t == \"altsum\":\n            self.digits(t, True)\n        elif t == \"power\":\n            k, a = self.pop(t, 2), self.pop(t, 2)\n            if k < 0:\n                raise TrawlError(f\"tide numbers are whole: {a} to the power {k} would be a fraction\")\n            st.append(a ** k)\n        elif t == \"echo\":\n            hi, lo = self.pop(t, 2), self.pop(t, 2)\n            key = tuple(self.bed.get(a, 0) for a in range(lo, hi + 1))\n            st.append(self.echo_n - self.echoes[key] if key in self.echoes else 0)\n            self.echoes[key] = self.echo_n\n            self.echo_n += 1\n        elif t == \"hush\":\n            self.echoes, self.echo_n = {}, 0\n        elif t == \"wave\":\n            hi, lo = self.pop(t, 2), self.pop(t, 2)\n            if lo > hi:\n                raise Sink()  # an empty range: no world can live here\n            if self.pos == len(self.tape):\n                self.tape.append([lo, hi, lo])\n            st.append(self.tape[self.pos][2])\n            self.pos += 1\n        elif t == \"want\":\n            if not self.pop(t):\n                raise Sink()\n        elif t == \"more\":\n            raise Sink(True)\n        elif t == \"aim\":\n            raise Sink((\"aim\", self.pop(t)))\n        elif t == \"worlds\":\n            st.append(self.sunk)\n        else:\n            raise TrawlError(f\"{_where(node)}nobody in the sea knows the word `{t}`.{suggest(t, self.words)}\")\n\n\ndef _where(node):\n    import os\n    return f\"{os.path.basename(node.tok.file)}:{node.tok.line}: \"\n\n\ndef uses_worlds(prog):\n    def walk(body):\n        for n in body:\n            if isinstance(n, Word) and n.name in (\"wave\", \"want\", \"more\", \"aim\"):\n                return True\n            for sub in (getattr(n, \"body\", None), getattr(n, \"then\", None), getattr(n, \"other\", None)):\n                if sub and walk(sub):\n                    return True\n        return False\n    return walk(prog.body)\n\n\ndef run(prog, max_steps=50_000_000, max_worlds=2_000_000, stream=None):\n    \"\"\"Run a parsed program. Returns (printed text, worlds sunk or None).\"\"\"\n    if not uses_worlds(prog):\n        sea = Sea(max_steps=max_steps, stream=stream)\n        return sea.run(prog), None\n    tape, kept, sunk, best = [], [], 0, None\n    while True:\n        w = Sea(tape, sunk, max_steps=max_steps)\n        try:\n            w.run(prog)\n            return \"\".join(kept) + \"\".join(w.out), sunk\n        except Sink as s:\n            if s.args and s.args[0] is True:  # `more`: this world was good, keep its words\n                kept.append(\"\".join(w.out))\n            elif s.args:  # `aim`: keep it only if it beats the best so far\n                score = s.args[0][1]\n                if best is None or score < best[0]:\n                    best = (score, \"\".join(w.out))\n            del tape[w.pos:]  # guesses made after the sinking point never happened\n            while tape and tape[-1][2] == tape[-1][1]:\n                tape.pop()  # this guess has tried every number: rewind further\n            sunk += 1\n            if not tape:\n                if best is not None:\n                    return \"\".join(kept) + best[1], sunk\n                if kept:\n                    return \"\".join(kept), sunk\n                raise TrawlError(f\"every world sank ({sunk} of them). the sea has no answer.\")\n            if sunk > max_worlds:\n                raise TrawlError(f\"{max_worlds} worlds sank and still no shore\")\n            tape[-1][2] += 1\n\n\ndef run_source(src, file=\"<program>\", **kw):\n    return run(parse(src, file), **kw)\n", "trawl/lib/numbers.trawl": "# numbers: everyday number-theory words for hunting, written in Trawl itself.\n#   use numbers\n#\n# These words keep their working values on the seabed at -65535 .. -65280.\n# Leave those cells alone in your own programs and the library will never step on you.\n#\n#   isqrt    ( n -- r )        floor of the square root of n (n >= 0)\n#   vp       ( n p -- e )      how many times p divides n (0 for n = 0)\n#   legendre ( n p -- e )      how many times the prime p divides n!\n#   carries  ( a b p -- c )    carries when adding a + b in base p\n#                              (Kummer: the power of p in the binomial C(a+b, a))\n#   powmod   ( b e m -- r )    b to the power e, mod m (e >= 0, m >= 1)\n#   ndigits  ( x base -- k )   how many digits x has in that base (0 has 1)\n#   reverse  ( x base -- y )   the digits of x in that base, read backwards\n#   smooth   ( n B -- flag )   1 if every prime factor of n is at most B\n#   nextprime ( n -- p )       the smallest prime above n\n\nuse stdlib\n\n: isqrt dup 2 < if else\n    dup\n    over over / over + 2 /\n    over over > [ drop nip\n      over over / over + 2 /\n      over over > ] drop drop nip\n  then ;\n\n: vp -65535 bury -65534 bury 0 -65533 bury\n  -65534 dig 0 = 0 = if\n    -65534 dig -65535 dig % 0 = [ drop\n      -65534 dig -65535 dig / -65534 bury\n      -65533 dig 1 + -65533 bury\n      -65534 dig -65535 dig % 0 = ] drop\n  then\n  -65533 dig ;\n\n: legendre -65535 bury -65534 bury 0 -65533 bury\n  -65534 dig -65535 dig / -65534 bury\n  -65534 dig 0 > [ drop\n    -65533 dig -65534 dig + -65533 bury\n    -65534 dig -65535 dig / -65534 bury\n    -65534 dig 0 > ] drop\n  -65533 dig ;\n\n# digit sums do the work: carries = (s(a) + s(b) - s(a+b)) / (p - 1)\n: carries -65535 bury -65534 bury -65533 bury\n  -65533 dig -65535 dig digsum\n  -65534 dig -65535 dig digsum +\n  -65533 dig -65534 dig + -65535 dig digsum -\n  -65535 dig 1 - / ;\n\n: powmod -65535 bury -65534 bury -65535 dig % -65533 bury 1 -65535 dig % -65532 bury\n  -65534 dig 0 > [ drop\n    -65534 dig 2 % 1 = if -65532 dig -65533 dig * -65535 dig % -65532 bury then\n    -65533 dig -65533 dig * -65535 dig % -65533 bury\n    -65534 dig 2 / -65534 bury\n    -65534 dig 0 > ] drop\n  -65532 dig ;\n\n: ndigits -65535 bury abs -65534 bury 1 -65533 bury\n  -65534 dig -65535 dig / -65534 bury\n  -65534 dig 0 > [ drop\n    -65533 dig 1 + -65533 bury\n    -65534 dig -65535 dig / -65534 bury\n    -65534 dig 0 > ] drop\n  -65533 dig ;\n\n: reverse -65535 bury abs -65534 bury 0 -65533 bury\n  -65534 dig 0 > [ drop\n    -65533 dig -65535 dig * -65534 dig -65535 dig % + -65533 bury\n    -65534 dig -65535 dig / -65534 bury\n    -65534 dig 0 > ] drop\n  -65533 dig ;\n\n: smooth -65535 bury abs -65534 bury 2 -65533 bury\n  -65534 dig 1 >  -65533 dig -65533 dig * -65534 dig > 0 =  * [ drop\n    -65534 dig -65533 dig % 0 = if\n      -65533 dig -65535 dig > if 1 -65534 bury 0 -65535 bury then\n      -65534 dig -65533 dig / -65534 bury\n    else\n      -65533 dig 1 + -65533 bury\n    then\n    -65534 dig 1 >  -65533 dig -65533 dig * -65534 dig > 0 =  * ] drop\n  -65534 dig -65535 dig > 0 =  -65534 dig 0 >  * ;\n\n: nextprime 1 + dup prime 0 = [ drop 1 + dup prime 0 = ] drop ;\n", "trawl/lib/orbits.trawl": "# orbits: follow a rule x -> step(x) until it comes back around.\n#   use orbits\n#\n# Define the rule first, as a word called `step` that takes one number and gives one back:\n#\n#   : step dup * 31 % ;          # x -> x^2 mod 31\n#   5 orbit . .                  # prints the loop length, then the tail length\n#\n#   orbit   ( x -- tail loop )   tail = steps before the loop starts, loop = its length.\n#                                Brent's method: no memory beyond a few cells, any length.\n#   lands   ( x -- y )           the first number of the loop that x falls into\n#   steps   ( x k -- y )         apply step k times\n#\n# Working cells: -65279 .. -65270 (leave them alone).\n\n: steps -65279 bury\n  -65279 dig 0 > [ drop step -65279 dig 1 - -65279 bury -65279 dig 0 > ] drop ;\n\n: orbit -65278 bury\n  1 -65277 bury 1 -65276 bury\n  -65278 dig -65275 bury\n  -65278 dig step -65274 bury\n  -65275 dig -65274 dig = 0 = [ drop\n    -65277 dig -65276 dig = if -65274 dig -65275 bury -65277 dig 2 * -65277 bury 0 -65276 bury then\n    -65274 dig step -65274 bury\n    -65276 dig 1 + -65276 bury\n    -65275 dig -65274 dig = 0 = ] drop\n  -65278 dig -65275 bury\n  -65278 dig -65276 dig steps -65274 bury\n  0 -65273 bury\n  -65275 dig -65274 dig = 0 = [ drop\n    -65275 dig step -65275 bury\n    -65274 dig step -65274 bury\n    -65273 dig 1 + -65273 bury\n    -65275 dig -65274 dig = 0 = ] drop\n  -65273 dig -65276 dig ;\n\n: lands dup orbit drop steps ;\n", "trawl/lib/stdlib.trawl": "# The Tide standard library, written in Tide itself.\n: nip swap drop ;\n: tuck swap over ;\n: sq dup * ;\n: abs dup 0 < if 0 swap - then ;\n: max over over < if swap then drop ;\n: min over over > if swap then drop ;\n: even 2 % 0 = ;\n: fact dup 2 < if drop 1 else dup 1 - fact * then ;\n: fib 0 1 rot [ rot rot swap over + rot 1 - ] drop drop ;\n: slow-fib dup 2 < if else dup 1 - slow-fib swap 2 - slow-fib + then ;\n: gcd dup 0 = if drop else tuck % gcd then ;\n: divides % 0 = ;\n: prime-from over over sq < if drop drop 1 else over over divides if drop drop 0 else 1 + prime-from then then ;\n: prime dup 2 < if drop 0 else 2 prime-from then ;\n: cr 10 emit ;\n"};
+const WORK = {"judge.trawl": "# shared words for Erdos 727 polynomial families.\n# The factors of (n+1)...(n+k) sit in cells 5001..5000+F (F at -3). judge ( n -- flag ) says\n# whether ((n+k)!)^2 | (2n)!: for every prime p, 2 * (power of p in the product) <= carries of n+n in base p.\n# -3 F  -5 trial bound  -19 n  -37 verdict  -38 p  -17 i\n\n: carries -45 bury -46 bury 0 -47 bury 0 -48 bury\n  -46 dig -48 dig + 0 > [ drop\n    -46 dig -45 dig % 2 * -48 dig + -45 dig < 0 = -48 bury\n    -47 dig -48 dig + -47 bury\n    -46 dig -45 dig / -46 bury\n    -46 dig -48 dig + 0 > ] drop\n  -47 dig ;\n\n# strip ( p -- v ): divide p out of every factor cell, counting how many times\n: strip -31 bury 0 -32 bury 1 -17 bury\n  1 [ drop\n    -17 dig 5000 + dig -33 bury\n    -33 dig -31 dig % 0 = [ drop\n      -33 dig -31 dig / -33 bury -32 dig 1 + -32 bury\n      -33 dig -31 dig % 0 = ] drop\n    -33 dig -17 dig 5000 + bury\n    -17 dig 1 + -17 bury\n    -17 dig -3 dig > 0 = ] drop\n  -32 dig ;\n\n# test ( p -- ): strip p and mark the verdict 0 if p has too few carries\n: test dup -38 bury strip 2 * -19 dig -38 dig carries > if 0 -37 bury then ;\n\n: judge -19 bury 1 -37 bury\n  2 -38 bury\n  1 [ drop\n    -38 dig -36 bury -38 dig test -36 dig 1 + -38 bury\n    -38 dig -5 dig > 0 =  -37 dig * ] drop\n  # what is left in each cell is 1 or a prime above the trial bound\n  1 -39 bury\n  1 [ drop\n    -39 dig 5000 + dig -40 bury\n    -40 dig 1 > if -40 dig test then\n    -39 dig 1 + -39 bury\n    -39 dig -3 dig > 0 =  -37 dig * ] drop\n  -37 dig ;\n", "land_k3.trawl": "# Johan Land's k=3 family: n = 210t^2 + 391t + 179. Land posted a proof (with Lean) that\n# it gives infinitely many n for k=3; that proof has not been reviewed yet.\n# Source: github.com/beetree/math_erdos_727\n#   n+1 = (6t+5)(35t+36)   n+2 = (t+1)(210t+181)   n+3 = (14t+13)(15t+14)\n# usage at bottom:  T0 T1 hunt   -> prints the count of t with ((n+3)!)^2 | (2n)!\nuse judge\n: isqrt -70 bury -70 dig -71 bury\n  -70 dig 1 > if\n    -71 dig -70 dig -71 dig / + 2 / -72 bury\n    -72 dig -71 dig < [ drop\n      -72 dig -71 bury\n      -71 dig -70 dig -71 dig / + 2 / -72 bury\n      -72 dig -71 dig < ] drop\n  then -71 dig ;\n: cells -50 bury\n  -50 dig 6 * 5 + 5001 bury   -50 dig 35 * 36 + 5002 bury\n  -50 dig 1 + 5003 bury       -50 dig 210 * 181 + 5004 bury\n  -50 dig 14 * 13 + 5005 bury -50 dig 15 * 14 + 5006 bury\n  6 -3 bury  -50 dig 210 * 181 + isqrt 1 + -5 bury ;\n: nof dup dup * 210 * swap 391 * + 179 + ;\n: hunt -61 bury -60 bury 0 -62 bury\n  1 [ drop\n    -60 dig cells -60 dig nof judge if -62 dig 1 + -62 bury then\n    -60 dig 1 + -60 bury\n    -60 dig -61 dig < ] drop\n  .\" count \" -62 dig . ;\n", "quartic_k4.trawl": "# A k=4 family found by a research Claude, Nov 2026: n = 8t^4 - 18t^2 + 6\n# A LEAD, NOT A PROOF: it gives k=4 for about 4% of t, which says nothing yet about\n# whether there are infinitely many such n.\n#   n+1 = (2t^2-1)(4t^2-7)       n+2 = 2(2t^2-t-2)(2t^2+t-2)\n#   n+3 = (2t^2-3)(4t^2-3)       n+4 = 2(t-1)(t+1)(4t^2-5)\n# usage at bottom:  T0 T1 hunt   -> prints each t with ((n+4)!)^2 | (2n)!, then the count\nuse judge\n: cells -50 bury\n  -50 dig dup * -51 bury\n  -51 dig 2 * 1 - 5001 bury   -51 dig 4 * 7 - 5002 bury   2 5003 bury\n  -51 dig 2 * -50 dig - 2 - 5004 bury   -51 dig 2 * -50 dig + 2 - 5005 bury\n  -51 dig 2 * 3 - 5006 bury   -51 dig 4 * 3 - 5007 bury   2 5008 bury\n  -50 dig 1 - 5009 bury   -50 dig 1 + 5010 bury   -51 dig 4 * 5 - 5011 bury\n  11 -3 bury  -50 dig 2 * 2 + -5 bury ;\n: nof dup * dup dup * 8 * swap 18 * - 6 + ;\n: hunt -61 bury -60 bury 0 -62 bury\n  1 [ drop\n    -60 dig cells -60 dig nof judge if -60 dig . -62 dig 1 + -62 bury then\n    -60 dig 1 + -60 bury\n    -60 dig -61 dig < ] drop\n  .\" count \" -62 dig . ;\n"};
+const EXAMPLES = [{"id": "hello", "title": "A first look", "src": "# A first look at Trawl. Run it:  trawl run hello.trawl   (or trawl fast hello.trawl)\n\n.\" count down: \" 5 [ dup . 1 - ] drop 10 emit\n\n# words of your own\n: sq dup * ;\n.\" 12 squared is \" 12 sq . 10 emit\n\n# numbers never overflow\n.\" 2 to the 100 is \" 2 100 power . 10 emit\n\n# digits in any base: digit sum and alternating digit sum\n.\" 1234 in base 10: digit sum \" 1234 10 digsum . .\" alternating sum \" 1234 10 altsum . 10 emit\n.\" 255 has this many 1 bits: \" 255 2 digsum . 10 emit\n\n# the seabed: numbered memory cells\n42 7 bury\n.\" cell 7 holds \" 7 dig . .\" and the seabed looks like \" .bed 10 emit\n"}, {"id": "rivers", "title": "Digit rivers", "src": "# rivers: x -> x + (digit sum of x)^2\n: flow dup 10 digsum dup * + ;\n1 15 [ swap dup . flow swap 1 - ] drop drop\n"}, {"id": "reef", "title": "Echo: when does it repeat?", "src": "# A ring reef: 13 spots in a circle; each year every spot becomes\n# (left + itself + right) mod 3. When does the reef repeat? echo knows.\n\n: n 13 ;\n: cell 1000 + dig ;\n: left dup 1 = if drop n else 1 - then ;\n: right dup n = if drop 1 else 1 + then ;\n: grow dup left cell over cell + over right cell + 3 % swap 2000 + bury ;\n: copy dup 2000 + dig swap 1000 + bury ;\n: year 1 [ dup grow 1 + dup n > if drop 0 then ] drop\n       1 [ dup copy 1 + dup n > if drop 0 then ] drop ;\n: show 1 [ dup cell 46 35 rot 1 = if swap then drop emit 1 + dup n > if drop 0 then ] drop 10 emit ;\n\n1 7 1000 + bury\n0 -1 bury\n# year by year, until echo hears a picture it has heard before\n1001 1013 echo drop\n1 [ drop show year -1 dig 1 + -1 bury 1001 1013 echo dup 0 = ] drop\n.\" the reef repeats every \" . .\" years, first seen again after \" -1 dig . .\" years\" \n"}, {"id": "whirlpools", "title": "Whirlpools", "src": "# Whirlpools: where does x -> x^2 mod 31 go? Every start falls into a loop.\n# `use orbits` gives `orbit` ( x -- tail loop ) for any rule named `step`.\n\n: step dup * 31 % ;\nuse orbits\n\n.\" start  tail  loop\" 10 emit\n1 [\n  dup . .\"     \" dup orbit swap . .\"     \" . 10 emit\n  1 + dup 10 >\n  if drop 0 then\n] drop\n"}, {"id": "queens", "title": "Worlds: six queens", "src": "# Six queens on a 6x6 board, none attacking another (written by Claude #2 in Tide).\n# Worlds: `wave` guesses a row for each column; `want` sinks any world where a queen is attacked.\nuse stdlib\n: n 6 ;\n: row 100 dig ;\n: col 101 dig ;\n: diff row swap dig - abs ;\n: ok-with dup diff dup 0 = if drop drop 0 else swap col swap - = if 0 else 1 then then ;\n: safe 1 [ dup col < if dup ok-with want 1 + else drop 0 then ] drop ;\n: place dup 101 bury 1 n wave 100 bury safe row swap bury ;\n1 [ dup place 1 + dup n > if drop 0 then ] drop\n: cell dig over = if 81 else 46 then emit 32 emit ;\n: line 1 [ swap over cell swap 1 + dup n > if drop 0 then ] drop cr ;\n1 [ line 1 + dup n > if drop 0 then ] drop\n"}, {"id": "pearls", "title": "Pearls: remembered answers", "src": "# Pearls (written by Claude #2 in Tide). slow-fib asks itself the same questions\n# millions of times. A pearled word remembers each answer it has worked out.\nuse stdlib\n.\" slow, no pearls: 22 slow-fib = \" 22 slow-fib . cr\n: kind-fib dup 2 < if else dup 1 - kind-fib swap 2 - kind-fib + then ;\npearl kind-fib\n.\" with pearls:     90 kind-fib = \" 90 kind-fib . .pearls cr\n"}, {"id": "orbit", "title": "Orbits: x^2 mod 31", "src": ": step dup * 31 % ;    # the rule x -> x^2 mod 31\nuse orbits\n3 orbit . .            # loop length, then steps before the loop\n"}, {"id": "a343507", "title": "OEIS A343507 by brute force", "src": "# a(n) = the least k with ((k+n)!)^2 dividing (2k)!   (OEIS A343507, Erd\u0151s problem 727)\n# fits: for every prime p up to k+n, the power of p in (2k)! must be at least\n# twice its power in (k+n)!. Cells: -2 k+n, -3 2k, -4 verdict, -6 p.\nuse numbers\n: fits\n  over + -2 bury  2 * -3 bury  1 -4 bury  2 -6 bury\n  1 [ drop\n    -6 dig prime if\n      -3 dig -6 dig legendre  -2 dig -6 dig legendre 2 *  < if 0 -4 bury then\n    then\n    -6 dig 1 + -6 bury\n    -6 dig -2 dig > 0 =  -4 dig * ] drop\n  -4 dig ;\n# a: try k = 0, 1, 2, ... until one fits\n: a -5 bury 0 1 [ drop dup -5 dig fits if 0 else 1 + 1 then ] drop ;\n2 a .        # 208.  Try 3 a . too (it takes several seconds here).\n# The fast search that found a(10) and a(11) is examples/a343507.trawl, run with trawl fast.\n"}, {"id": "k4", "title": "Erd\u0151s 727: a k = 4 family", "src": "# n = 8t^4 - 18t^2 + 6 makes n+1..n+4 split into small factors.\n# Which t give ((n+4)!)^2 | (2n)! ?  A lead, not a proof: see examples/erdos727.\nuse quartic_k4\n60 130 hunt\n"}, {"id": "stuck", "title": "A loop that is proven stuck", "src": "# this loop never changes anything, so it can never end.\n# Trawl notices the exact same state coming back and stops with a proof.\n1 [ 5 drop ]\n"}];
+const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+
+const workerSrc = `
+importScripts(${JSON.stringify(PYODIDE)} + "pyodide.js");
+let py = null, run = null;
+self.onmessage = async (e) => {
+  const m = e.data;
+  if (m.type === "init") {
+    try {
+      py = await loadPyodide({ indexURL: ${JSON.stringify(PYODIDE)} });
+      for (const [path, text] of Object.entries(m.py)) {
+        const dir = "/home/pyodide/" + path.split("/").slice(0, -1).join("/");
+        py.FS.mkdirTree(dir);
+        py.FS.writeFile("/home/pyodide/" + path, text);
+      }
+      py.FS.mkdirTree("/work");
+      for (const [name, text] of Object.entries(m.work)) py.FS.writeFile("/work/" + name, text);
+      py.globals.set("post_out", (t) => self.postMessage({ type: "out", text: t }));
+      await py.runPythonAsync(\`
+import sys, time
+sys.path.insert(0, "/home/pyodide")
+sys.setrecursionlimit(4000)
+from trawl.lang import parse, TrawlError
+from trawl.interp import run as trawl_run, uses_worlds
+
+LIMIT = 500_000
+
+class Out:
+    def __init__(self):
+        self.buf, self.n, self.total, self.t = [], 0, 0, time.time()
+    def write(self, text):
+        self.total += len(text)
+        if self.total > LIMIT:
+            self.flush()
+            raise TrawlError("the playground stops after 500,000 printed characters. run it with trawl on your own machine for more.")
+        self.buf.append(text); self.n += len(text)
+        if self.n > 4096 or time.time() - self.t > 0.08:
+            self.flush()
+    def flush(self):
+        if self.buf:
+            post_out("".join(self.buf))
+            self.buf, self.n, self.t = [], 0, time.time()
+
+def go(src):
+    out = Out()
+    t0 = time.time()
+    try:
+        prog = parse(src, "/work/program.trawl")
+        worlds = uses_worlds(prog)
+        text, sunk = trawl_run(prog, max_steps=20_000_000, stream=None if worlds else out)
+        if worlds:
+            out.write(text + "\\\\n(%d worlds sank along the way)" % sunk)
+        out.flush()
+        return ["ok", time.time() - t0]
+    except TrawlError as e:
+        out.flush()
+        return ["err", str(e)]
+    except RecursionError:
+        out.flush()
+        return ["err", "the sea got too deep: too many words calling words. trawl on your own machine goes deeper."]
+\`);
+      run = py.globals.get("go");
+      self.postMessage({ type: "ready", version: py.version });
+    } catch (err) {
+      self.postMessage({ type: "fail", msg: String(err) });
+    }
+  } else if (m.type === "run") {
+    const r = run(m.src).toJs();
+    self.postMessage({ type: "done", status: r[0], info: r[1] });
+  }
+};`;
+
+const $ = (id) => document.getElementById(id);
+const code = $("code"), out = $("out"), runBtn = $("run"), status = $("status"), pick = $("examples");
+let worker = null, ready = false, running = false, startedAt = 0, gotOutput = false;
+
+function setStatus(text, cls = "") {
+  status.className = cls;
+  status.innerHTML = '<span class="dot"></span>';
+  status.append(text);
+  document.body.classList.toggle("busy", cls === "busy");
+}
+function appendOut(text, cls) {
+  if (cls) { const s = document.createElement("span"); s.className = cls; s.textContent = text; out.append(s); }
+  else out.append(document.createTextNode(text));
+  out.scrollTop = out.scrollHeight;
+}
+
+function startWorker() {
+  ready = false;
+  worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: "text/javascript" })));
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === "ready") {
+      ready = true; runBtn.disabled = false; runBtn.textContent = "Run";
+      setStatus("ready");
+    } else if (m.type === "fail") {
+      setStatus("couldn't start the interpreter. check your connection and reload.", "err");
+      runBtn.textContent = "Run";
+    } else if (m.type === "out") {
+      gotOutput = true; appendOut(m.text);
+    } else if (m.type === "done") {
+      running = false; runBtn.textContent = "Run"; runBtn.classList.add("primary");
+      if (m.status === "ok") {
+        setStatus(m.info < 1 ? `finished in ${Math.max(1, Math.round(m.info * 1000))} ms` : `finished in ${m.info.toFixed(1)} s`, "ok");
+        if (!gotOutput) appendOut("(nothing printed)", "note");
+      } else {
+        appendOut((gotOutput && !out.textContent.endsWith("\n") ? "\n" : "") + "~ " + m.info, "err");
+        setStatus("stopped with an error", "err");
+      }
+    }
+  };
+  worker.onerror = (e) => {
+    e.preventDefault();
+    setStatus("couldn't load the interpreter. check your connection and reload.", "err");
+    runBtn.textContent = "Run";
+  };
+  worker.postMessage({ type: "init", py: PY, work: WORK });
+}
+
+function runProgram() {
+  if (!ready) return;
+  if (running) { // stop: the only safe way to interrupt Python is a fresh worker
+    worker.terminate(); running = false;
+    appendOut((out.textContent && !out.textContent.endsWith("\n") ? "\n" : "") + "~ stopped by you", "err");
+    runBtn.disabled = true; runBtn.textContent = "Loading…";
+    setStatus("restarting the interpreter…", "busy");
+    startWorker();
+    return;
+  }
+  out.textContent = ""; gotOutput = false; running = true; startedAt = performance.now();
+  runBtn.textContent = "Stop";
+  setStatus("running…", "busy");
+  worker.postMessage({ type: "run", src: code.value });
+}
+
+// examples and sharing
+for (const ex of EXAMPLES) {
+  const o = document.createElement("option"); o.value = ex.id; o.textContent = ex.title; pick.append(o);
+}
+pick.addEventListener("change", () => {
+  const ex = EXAMPLES.find((x) => x.id === pick.value);
+  code.value = ex.src; out.textContent = "";
+  history.replaceState(null, "", "#" + ex.id);
+  if (ready && !running) setStatus("ready");
+});
+function encode(s) { return btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function decode(s) { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/")); return new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))); }
+$("share").addEventListener("click", async () => {
+  const url = location.href.split("#")[0] + "#code=" + encode(code.value);
+  history.replaceState(null, "", url);
+  try { await navigator.clipboard.writeText(url); $("share").textContent = "Copied"; }
+  catch { $("share").textContent = "Link in address bar"; }
+  setTimeout(() => ($("share").textContent = "Copy link"), 1800);
+});
+function loadFromHash() {
+  const h = location.hash.slice(1);
+  if (h.startsWith("code=")) { try { code.value = decode(h.slice(5)); return; } catch {} }
+  const ex = EXAMPLES.find((x) => x.id === h) || EXAMPLES[0];
+  pick.value = ex.id; code.value = ex.src;
+}
+
+// editor comforts
+code.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); runProgram(); }
+  else if (e.key === "Tab" && !e.shiftKey) {
+    e.preventDefault();
+    const { selectionStart: a, selectionEnd: b } = code;
+    code.setRangeText("  ", a, b, "end");
+  }
+});
+runBtn.addEventListener("click", runProgram);
+
+loadFromHash();
+setStatus("starting the interpreter…", "busy");
+startWorker();
+</script>
+</body>
+</html>
