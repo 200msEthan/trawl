@@ -18,6 +18,13 @@ SPIN = "|/-\\"
 QUIET = 1.0  # seconds of silence before the line appears
 
 
+def quiet():
+    try:  # TRAWL_PROGRESS_AFTER: a shorter wait, for tests that can't sit through a long run
+        return float(os.environ.get("TRAWL_PROGRESS_AFTER", QUIET))
+    except ValueError:
+        return QUIET
+
+
 def wanted(stream=None):
     force = os.environ.get("TRAWL_PROGRESS", "")
     if force in ("0", "1"):
@@ -92,8 +99,8 @@ class Ticker:
             self.drawn = 0
 
     def _draw(self, k):
-        now = time.monotonic()
-        if now - self.t0 < QUIET or (self.shared and now - self.last_out < QUIET):
+        now, wait = time.monotonic(), quiet()
+        if now - self.t0 < wait or (self.shared and now - self.last_out < wait):
             return
         self.out.flush()
         if self.shared and not self.line_start:
