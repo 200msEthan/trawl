@@ -36,11 +36,8 @@
     -39 dig 5011 > 0 =  -37 dig * ] drop
   -37 dig ;
 
-: hunt -61 bury -60 bury 0 -62 bury
-  1 [ drop
-    -60 dig cells -60 dig nof judge if -60 dig . -62 dig 1 + -62 bury then
-    -60 dig 1 + -60 bury
-    -60 dig -61 dig < ] drop
-  ." count " -62 dig . 10 emit ;
+# good? ( t -- flag ): print t and answer 1 when it works. Every cell it reads is set first,
+# so the sweep can share the t values out over cores (--jobs N).
+: good? dup -60 bury cells -60 dig nof judge dup if -60 dig . then ;
 
-2 5000 hunt
+2 5000 sweep good? ." count " . 10 emit

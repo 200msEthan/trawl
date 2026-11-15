@@ -57,8 +57,16 @@ static int mag_mul(limb *r, const limb *a, int an, const limb *b, int bn) {
 
 /* q = a / d (single limb), returns remainder; q may alias a */
 static limb mag_divsmall(limb *q, const limb *a, int an, limb d) {
-  dlimb r = 0;
-  for (int i = an - 1; i >= 0; i--) { r = (r << 32) | a[i]; q[i] = (limb)(r / d); r %= d; }
+  /* multiply by a reciprocal instead of dividing: the hardware divide is many times slower */
+  if (d == 1) { if (q != a) memcpy(q, a, sizeof(limb) * (size_t)an); return 0; }
+  dlimb v = UINT64_MAX / d, r = 0;
+  for (int i = an - 1; i >= 0; i--) {
+    dlimb x = (r << 32) | a[i];
+    dlimb qq = (dlimb)(((unsigned __int128)x * v) >> 64);
+    r = x - qq * d;
+    while (r >= d) { r -= d; qq++; }
+    q[i] = (limb)qq;
+  }
   return (limb)r;
 }
 

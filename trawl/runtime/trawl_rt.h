@@ -17,6 +17,20 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include "trawl_big.h"
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <errno.h>
+#define rt_truncate(f, n) ((void)!ftruncate(fileno(f), (n)))
+#else
+#include <io.h>
+#define rt_truncate(f, n) ((void)_chsize(_fileno(f), (long)(n)))
+#endif
+#ifndef TRAWL_PROG_HASH
+#define TRAWL_PROG_HASH "0"
+#endif
 
 typedef int64_t V; /* a Trawl number: (n << 1) for small n, or (Big* | 1) */
 
@@ -35,9 +49,21 @@ typedef int64_t V; /* a Trawl number: (n << 1) for small n, or (Big* | 1) */
 
 static int rt_world_mode = 0; /* 1 when the program uses wave/want/more/aim */
 static void rt_flush(void);
+static int rt_capture = 0;    /* 1 while a sweep block's words go into wbuf instead of stdout */
+static int rt_child_fd = -1;  /* in a sweep worker: where its block's result goes */
+static void rt_child_died(const char *msg);
+static void rt_capture_spill(void);
+static void rt_stop_workers(void);
 
 static void rt_die(const char *fmt, ...) {
   va_list ap;
+  if (rt_child_fd >= 0) {
+    char msg[2048];
+    va_start(ap, fmt); vsnprintf(msg, sizeof msg, fmt, ap); va_end(ap);
+    rt_child_died(msg);
+  }
+  rt_stop_workers();
+  if (rt_capture) rt_capture_spill();
   rt_flush();
   fputs("~ ", stderr);
   va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap);
@@ -53,6 +79,8 @@ typedef struct Big { struct Big *next; uint32_t mark; int sign; int n; limb d[];
 static Big *big_list = NULL;
 static size_t big_bytes = 0, big_next_gc = (size_t)64 << 20;
 static int gc_due = 0; /* an int, not a V, so number stores can't alias it */
+/* `x d %` then `x d /` is common (taking digits off): the remainder pass also keeps the quotient */
+static Big *divc_a = NULL, *divc_q = NULL; static int64_t divc_d = 0;
 
 static V big_alloc_from(int sign, const limb *d, int n, int permanent) {
   n = mag_norm(d, n);
@@ -76,6 +104,7 @@ static V big_alloc_from(int sign, const limb *d, int n, int permanent) {
  * garbage collector can't see. A scope frees the ones made since it began, except the live ones. */
 static Big *big_scope(void) { return big_list; }
 static void big_trim(Big *since, const V *live, int k) {
+  divc_a = divc_q = NULL;
   Big **p = &big_list;
   while (*p && *p != since) {
     Big *b = *p; int keep = b->mark != 0;
@@ -218,6 +247,8 @@ static void rt_zero_split(V a) {
   char *s = v_to_str(a);
   rt_die("you tried to split %s into zero pieces. the ocean refuses.", s);
 }
+static V big_div_small(V a, int64_t y);
+static V big_div_small_r(V a, int64_t y, int64_t *rem);
 static inline V v_div(V a, V b) {
   if (LIKELY(BOTHSMALL(a, b))) {
     int64_t x = SMALLN(a), y = SMALLN(b);
@@ -228,9 +259,52 @@ static inline V v_div(V a, V b) {
       return MKV(q);
     }
   }
+  if (ISSMALL(b) && SMALLN(b) > 0 && SMALLN(b) < ((int64_t)1 << 32) && !ISSMALL(a) && BIGP(a)->sign > 0)
+    return big_div_small(a, SMALLN(b));
   V q; big_divmod(a, b, &q, NULL); return q;
 }
+/* a big number divided by a small one that fits in a limb: one pass, no scratch space */
+static inline limb mag_modsmall(const limb *a, int an, limb d) {
+  if (d == 1) return 0;
+  dlimb v = UINT64_MAX / d, r = 0;
+  for (int i = an - 1; i >= 0; i--) {
+    dlimb x = (r << 32) | a[i];
+    r = x - (dlimb)(((unsigned __int128)x * v) >> 64) * d;
+    while (r >= d) r -= d;
+  }
+  return (limb)r;
+}
+static V big_mod_small(V a, int64_t y) {
+  Big *b = BIGP(a);
+  uint64_t m = y < 0 ? (uint64_t)(-y) : (uint64_t)y;
+  int64_t r;
+  if (y > 0 && b->sign > 0 && b->n >= 8) { /* keep the quotient too, for a division that may follow */
+    V q = big_div_small_r(a, y, &r);
+    divc_a = b; divc_d = y; divc_q = ISSMALL(q) ? NULL : BIGP(q);
+  } else r = (int64_t)mag_modsmall(b->d, b->n, (limb)m);
+  if (r && (b->sign < 0) != (y < 0)) r = (int64_t)m - r; /* floor: the remainder takes the divisor's sign */
+  return MKV(y < 0 ? -r : r);
+}
+static V big_div_small_r(V a, int64_t y, int64_t *rem) { /* a > 0 big, 0 < y < 2^32 */
+  Big *b = BIGP(a);
+  size_t bytes = sizeof(Big) + sizeof(limb) * (size_t)b->n;
+  Big *q = (Big *)malloc(bytes);
+  if (!q) rt_die("the sea ran out of room for a %d-digit number", b->n * 10);
+  *rem = (int64_t)mag_divsmall(q->d, b->d, b->n, (limb)y);
+  int n = mag_norm(q->d, b->n);
+  if (n <= 2) { V v = big_alloc_from(1, q->d, n, 0); free(q); return v; }
+  q->sign = 1; q->n = n; q->mark = 0;
+  q->next = big_list; big_list = q; big_bytes += sizeof(Big) + sizeof(limb) * (size_t)n;
+  if (big_bytes > big_next_gc) gc_due = 1;
+  return (V)((uint64_t)(uintptr_t)q | 1u);
+}
+static V big_div_small(V a, int64_t y) {
+  if (divc_q && divc_a == BIGP(a) && divc_d == y) return (V)((uint64_t)(uintptr_t)divc_q | 1u);
+  int64_t r; return big_div_small_r(a, y, &r);
+}
 static inline V v_mod(V a, V b) {
+  if (ISSMALL(b) && !ISSMALL(a) && SMALLN(b) != 0 && SMALLN(b) > -((int64_t)1 << 32) && SMALLN(b) < ((int64_t)1 << 32))
+    return big_mod_small(a, SMALLN(b));
   if (LIKELY(BOTHSMALL(a, b))) {
     int64_t x = SMALLN(a), y = SMALLN(b);
     if (UNLIKELY(y == 0)) rt_zero_split(a);
@@ -284,6 +358,21 @@ static V v_digits(V x, V b, int alternate) {
     int64_t total = 0, g = 1;
     while (n) { total += g * (int64_t)(n % base); n /= base; if (alternate) g = -g; }
     return MKV(total);
+  }
+  if (ISSMALL(b) && SMALLN(b) < ((int64_t)1 << 32)) {
+    /* divide by base^k (the biggest power that fits in a limb) and take k digits from each remainder */
+    uint64_t base = (uint64_t)SMALLN(b), chunk = base; int k = 1;
+    while (chunk * base <= 0xFFFFFFFFu) { chunk *= base; k++; }
+    Big *xb = BIGP(x);
+    int n = xb->n;
+    limb *t = (limb *)malloc(sizeof(limb) * (size_t)n); memcpy(t, xb->d, sizeof(limb) * (size_t)n);
+    int64_t sum = 0, g = 1; /* |sum| < 2^32 per limb pass: no overflow below about 10^9 limbs */
+    while (n > 0) {
+      uint64_t r = mag_divsmall(t, t, n, (limb)chunk); n = mag_norm(t, n);
+      for (int i = 0; i < k && (n > 0 || r); i++) { sum += g * (int64_t)(r % base); r /= base; if (alternate) g = -g; }
+    }
+    free(t);
+    return MKV(sum);
   }
   V total = 0; int g = 1;
   while (x != 0) {
@@ -355,6 +444,91 @@ static uint64_t u_spf(uint64_t n) {
   return a < b ? a : b;
 }
 
+/* the same for numbers below 2^127, in Montgomery form with 128-bit words: much faster than
+ * the general big-number path, which allocates a new number for every step */
+typedef unsigned __int128 u128;
+typedef struct { u128 n, ni, one, r2; } Mont;
+static inline void w_mul(u128 a, u128 b, u128 *hi, u128 *lo) {
+  uint64_t a0 = (uint64_t)a, a1 = (uint64_t)(a >> 64), b0 = (uint64_t)b, b1 = (uint64_t)(b >> 64);
+  u128 p00 = (u128)a0 * b0, p01 = (u128)a0 * b1, p10 = (u128)a1 * b0, p11 = (u128)a1 * b1;
+  u128 mid = (p00 >> 64) + (uint64_t)p01 + (uint64_t)p10;
+  *lo = (u128)(uint64_t)p00 | (mid << 64);
+  *hi = p11 + (p01 >> 64) + (p10 >> 64) + (mid >> 64);
+}
+static inline u128 m_redc(const Mont *M, u128 hi, u128 lo) {
+  u128 m = lo * M->ni, mh, ml;
+  w_mul(m, M->n, &mh, &ml);
+  u128 t = hi + mh + (lo != 0);
+  return t >= M->n ? t - M->n : t;
+}
+static inline u128 m_mul(const Mont *M, u128 a, u128 b) { u128 hi, lo; w_mul(a, b, &hi, &lo); return m_redc(M, hi, lo); }
+static inline u128 m_add(const Mont *M, u128 a, u128 b) { u128 t = a + b; return t >= M->n ? t - M->n : t; }
+static Mont m_init(u128 n) { /* n odd, 3 <= n < 2^127 */
+  Mont M; M.n = n;
+  u128 inv = n; for (int i = 0; i < 7; i++) inv *= 2 - n * inv;
+  M.ni = (u128)0 - inv;
+  M.one = ((u128)0 - n) % n; /* 2^128 mod n */
+  u128 t = M.one; for (int i = 0; i < 128; i++) { t <<= 1; if (t >= n) t -= n; }
+  M.r2 = t;
+  return M;
+}
+static inline u128 m_to(const Mont *M, u128 x) { return m_mul(M, x % M->n, M->r2); }
+static u128 m_pow(const Mont *M, u128 a, u128 e) { u128 r = M->one; while (e) { if (e & 1) r = m_mul(M, r, a); a = m_mul(M, a, a); e >>= 1; } return r; }
+static int w_isprime(u128 n) { /* n odd, has no prime factor below 1000, n < 2^127 */
+  Mont M = m_init(n);
+  u128 d = n - 1; int s = 0;
+  while (!(d & 1)) { d >>= 1; s++; }
+  u128 minus1 = M.n - M.one;
+  for (int i = 0; i < 13; i++) {
+    u128 x = m_pow(&M, m_to(&M, (u128)PRIME_BASES[i]), d);
+    if (x == M.one || x == minus1) continue;
+    int ok = 0;
+    for (int j = 1; j < s; j++) { x = m_mul(&M, x, x); if (x == minus1) { ok = 1; break; } }
+    if (!ok) return 0;
+  }
+  return 1;
+}
+static u128 w_gcd(u128 a, u128 b) { while (b) { u128 t = a % b; a = b; b = t; } return a; }
+static u128 w_rho(u128 n) { /* Brent's rho on x -> x^2 + c, all in Montgomery form (gcds are unchanged by it) */
+  Mont M = m_init(n);
+  for (uint64_t c0 = 1;; c0++) {
+    u128 c = m_to(&M, c0), y = m_to(&M, 2), q = M.one, g = 1, x = 0, ys = 0;
+    uint64_t r = 1;
+    while (g == 1) {
+      x = y;
+      for (uint64_t i = 0; i < r; i++) y = m_add(&M, m_mul(&M, y, y), c);
+      for (uint64_t k = 0; k < r && g == 1; k += 128) {
+        ys = y;
+        for (uint64_t i = 0; i < 128 && i < r - k; i++) {
+          y = m_add(&M, m_mul(&M, y, y), c);
+          q = m_mul(&M, q, x > y ? x - y : y - x);
+        }
+        g = w_gcd(q, n);
+      }
+      r *= 2;
+    }
+    if (g == n) {
+      g = 1;
+      while (g == 1) { ys = m_add(&M, m_mul(&M, ys, ys), c); g = w_gcd(x > ys ? x - ys : ys - x, n); }
+    }
+    if (g != n) return g;
+  }
+}
+static u128 w_spf(u128 n) { /* n has no prime factor below 1000 */
+  if (n >> 62 == 0) return u_spf((uint64_t)n);
+  if (w_isprime(n)) return n;
+  u128 f = w_rho(n), a = w_spf(f), b = w_spf(n / f);
+  return a < b ? a : b;
+}
+static int v_to_w(V v, u128 *out) { /* a positive number below 2^127? */
+  if (ISSMALL(v)) { if (SMALLN(v) <= 0) return 0; *out = (u128)SMALLN(v); return 1; }
+  Big *b = BIGP(v);
+  if (b->sign <= 0 || b->n > 4 || (b->n == 4 && b->d[3] >> 31)) return 0;
+  u128 x = 0; for (int i = b->n - 1; i >= 0; i--) x = (x << 32) | b->d[i];
+  *out = x; return 1;
+}
+static V w_to_v(u128 x) { limb d[4]; for (int i = 0; i < 4; i++) { d[i] = (limb)x; x >>= 32; } return big_alloc_from(1, d, 4, 0); }
+
 /* the same, for big numbers */
 static V v_powmod(V a, V e, V m) {
   Big *scope = big_scope();
@@ -371,6 +545,7 @@ static V v_powmod(V a, V e, V m) {
 }
 static int big_isprime(V n) {
   for (int i = 0; i < 13; i++) if (v_mod(n, MKV(PRIME_BASES[i])) == 0) return 0; /* n is big, so not the prime itself */
+  u128 w; if (v_to_w(n, &w)) return w_isprime(w);
   V nm1 = v_sub(n, MKV(1)), d = nm1; int s = 0;
   for (;;) { V q, r; big_divmod(d, MKV(2), &q, &r); if (r != 0) break; d = q; s++; }
   for (int i = 0; i < 13; i++) {
@@ -423,6 +598,7 @@ static V big_spf(V n) {
   if (ISSMALL(n)) return MKV(u_spf((uint64_t)SMALLN(n)));
   if (v_mod(n, MKV(2)) == 0) return MKV(2);
   for (int64_t i = 3; i < 1000; i += 2) if (v_mod(n, MKV(i)) == 0) return MKV(i);
+  u128 w; if (v_to_w(n, &w)) return w_to_v(w_spf(w));
   if (big_isprime(n)) return n;
   V f = big_rho(n), a = big_spf(f), b = big_spf(v_div(n, f));
   return v_cmp(a, b) < 0 ? a : b;
@@ -442,7 +618,7 @@ static V v_spf(V n) {
 static char *wbuf = NULL; static size_t wbuf_len = 0, wbuf_cap = 0; /* this world's words */
 
 static void rt_out(const char *s, size_t n) {
-  if (rt_world_mode) {
+  if (rt_world_mode || rt_capture) {
     if (wbuf_len + n + 1 > wbuf_cap) {
       wbuf_cap = (wbuf_len + n + 1) * 2; wbuf = (char *)realloc(wbuf, wbuf_cap);
     }
@@ -453,6 +629,7 @@ static void rt_out(const char *s, size_t n) {
   }
 }
 static void rt_flush(void) { fflush(stdout); }
+static void rt_capture_spill(void) { rt_capture = 0; fwrite(wbuf, 1, wbuf_len, stdout); wbuf_len = 0; }
 static void rt_puts(const char *s) { rt_out(s, strlen(s)); }
 
 static void rt_print(V v) {
@@ -706,6 +883,237 @@ static long rt_call_pearl(int id, WordFn fn, const char *name, long sp) {
   shell_put(s, n, S[sp - 1]);
   return sp;
 }
+/* ------------------------------------------------------------------ sweep: many cores, and resume */
+/* `lo hi sweep word` runs word on every n in [lo, hi) and counts the nonzero answers.
+   A top-level sweep is cut into SWEEP_BLOCKS blocks. With --jobs N, N worker processes (fork) run
+   blocks side by side; each worker keeps its block's printed words and the parent prints them in n
+   order, so the output is exactly what one core prints. With --save FILE, every finished block (its
+   count and its words) is written to FILE, and a rerun of the same program replays those blocks
+   instead of running them again. Changes a block makes to the seabed or pearls stay in its own sea. */
+
+#define SWEEP_BLOCKS 256
+static int rt_jobs = 1;
+static const char *rt_save_path = NULL;
+static int rt_sweep_depth = 0, rt_in_worker = 0;
+static long rt_sweep_no = 0;
+typedef struct { long no; int64_t lo, hi, a, b, count; char *out; size_t len; long off; } SaveRec;
+static SaveRec *saved = NULL; static long saved_n = 0, saved_pos = 0;
+static FILE *save_fh = NULL;
+
+static void rt_sweep_shape(const char *name, int64_t n, long got) {
+  rt_die("`sweep %s` wants `%s` to turn each n into one answer, but at n = %lld it left %ld number%s in its place",
+         name, name, (long long)n, got, got == 1 ? "" : "s");
+}
+
+static void rt_write_all(int fd, const void *p, size_t n) {
+#ifndef _WIN32
+  const char *c = (const char *)p;
+  while (n) { ssize_t k = write(fd, c, n); if (k <= 0) _exit(3); c += k; n -= (size_t)k; }
+#else
+  (void)fd; (void)p; (void)n;
+#endif
+}
+static void rt_child_died(const char *msg) { /* a worker hit an error: hand its words and the message to the parent */
+#ifndef _WIN32
+  int64_t c = -1; uint64_t len = wbuf_len, ml = strlen(msg);
+  rt_write_all(rt_child_fd, &c, 8); rt_write_all(rt_child_fd, &len, 8); rt_write_all(rt_child_fd, wbuf, wbuf_len);
+  rt_write_all(rt_child_fd, &ml, 8); rt_write_all(rt_child_fd, msg, ml);
+  _exit(1);
+#else
+  (void)msg;
+#endif
+}
+
+static void save_open(void) {
+  FILE *f = fopen(rt_save_path, "rb");
+  char head[64]; snprintf(head, sizeof head, "trawl-save 1 %s\n", TRAWL_PROG_HASH);
+  long good = 0;
+  if (f) {
+    fseek(f, 0, SEEK_END); long size = ftell(f); fseek(f, 0, SEEK_SET);
+    char *all = (char *)malloc((size_t)size + 1);
+    size_t got = fread(all, 1, (size_t)size, f); fclose(f); all[got] = 0;
+    size_t hl = strlen(head);
+    if (got >= hl && !memcmp(all, head, hl)) {
+      size_t pos = hl; good = (long)hl;
+      for (;;) {
+        long no; long long lo, hi, a, b, c; unsigned long long len; int used = 0;
+        char *nl = memchr(all + pos, '\n', got - pos);
+        if (!nl) break;
+        *nl = 0;
+        if (sscanf(all + pos, "B %ld %lld %lld %lld %lld %lld %llu%n", &no, &lo, &hi, &a, &b, &c, &len, &used) != 7) break;
+        size_t body = (size_t)(nl - all) + 1;
+        if (body + len + 1 > got || all[body + len] != '\n') break;
+        saved = (SaveRec *)realloc(saved, sizeof(SaveRec) * (size_t)(saved_n + 1));
+        SaveRec *r = &saved[saved_n++];
+        r->no = no; r->lo = lo; r->hi = hi; r->a = a; r->b = b; r->count = c; r->len = (size_t)len; r->off = good;
+        r->out = (char *)malloc((size_t)len + 1); memcpy(r->out, all + body, (size_t)len);
+        pos = body + (size_t)len + 1; good = (long)pos;
+      }
+    } else if (got) {
+      fprintf(stderr, "~ note: %s was saved by a different program (or an older Trawl), so this run starts over\n", rt_save_path);
+    }
+    free(all);
+  }
+  save_fh = fopen(rt_save_path, good ? "r+b" : "wb");
+  if (!save_fh) rt_die("can't write the save file %s", rt_save_path);
+  if (good) { fseek(save_fh, good, SEEK_SET); }
+  else { fputs(head, save_fh); good = (long)strlen(head); }
+  fflush(save_fh);
+  rt_truncate(save_fh, good);
+  if (saved_n) fprintf(stderr, "~ resuming from %s: %ld finished block%s\n", rt_save_path, saved_n, saved_n == 1 ? "" : "s");
+}
+static void save_forget_rest(void) { /* the run took a different path from the saved one: drop what's left */
+  if (saved_pos < saved_n) {
+    fflush(save_fh); fseek(save_fh, saved[saved_pos].off, SEEK_SET);
+    rt_truncate(save_fh, saved[saved_pos].off);
+    saved_n = saved_pos;
+  }
+}
+static void save_block(long no, int64_t lo, int64_t hi, int64_t a, int64_t b, int64_t c, const char *out, size_t len) {
+  if (!save_fh) return;
+  fprintf(save_fh, "B %ld %lld %lld %lld %lld %lld %llu\n", no, (long long)lo, (long long)hi, (long long)a, (long long)b,
+          (long long)c, (unsigned long long)len);
+  fwrite(out, 1, len, save_fh); fputc('\n', save_fh); fflush(save_fh);
+}
+
+#ifdef _WIN32
+static void rt_stop_workers(void) {}
+#endif
+static int64_t sweep_run(int pid, WordFn fn, const char *name, int64_t a, int64_t b, long sp) {
+  int64_t c = 0;
+  for (int64_t n = a; n < b; n++) {
+    ENSURE(sp + 1); S[sp] = MKV(n);
+    long sp2 = pid >= 0 ? rt_call_pearl(pid, fn, name, sp + 1) : fn(sp + 1);
+    if (sp2 != sp + 1) rt_sweep_shape(name, n, sp2 - sp);
+    if (S[sp] != VFALSE) c++;
+  }
+  return c;
+}
+
+#ifndef _WIN32
+typedef struct { pid_t pid; FILE *f; int done, status; } Worker;
+static Worker *sw_w = NULL; static int64_t sw_from = 0, sw_to = 0;
+static void rt_stop_workers(void) { /* the parent is stopping: take the workers still running with it */
+  if (!sw_w || rt_in_worker) return;
+  Worker *w = sw_w; sw_w = NULL;
+  for (int64_t k = sw_from; k < sw_to; k++) if (!w[k].done) { int st; kill(w[k].pid, SIGKILL); waitpid(w[k].pid, &st, 0); w[k].done = 1; }
+}
+static void sweep_take(Worker *w, int64_t *count, long no, int64_t lo, int64_t hi, int64_t a, int64_t b) {
+  int64_t c = 0; uint64_t len = 0;
+  rewind(w->f);
+  if (fread(&c, 8, 1, w->f) != 1 || fread(&len, 8, 1, w->f) != 1)
+    rt_die("a sweep worker stopped without an answer (n from %lld to %lld)", (long long)a, (long long)(b - 1));
+  char *out = (char *)malloc((size_t)len + 1);
+  if (len && fread(out, 1, (size_t)len, w->f) != len) rt_die("a sweep worker's answer was cut short");
+  rt_out(out, (size_t)len);
+  if (c < 0) {
+    uint64_t ml = 0; char msg[2049] = {0};
+    if (fread(&ml, 8, 1, w->f) == 1 && ml < sizeof msg && fread(msg, 1, (size_t)ml, w->f) == ml) msg[ml] = 0;
+    fclose(w->f);
+    rt_die("%s", msg);
+  }
+  fclose(w->f);
+  save_block(no, lo, hi, a, b, c, out, (size_t)len);
+  free(out);
+  *count += c;
+}
+#endif
+
+static long rt_sweep(int pid, WordFn fn, const char *name, long sp) {
+  if (sp < 2) rt_underflow("sweep", 2);
+  V vlo = S[sp - 2], vhi = S[sp - 1];
+  sp -= 2;
+  if (!BOTHSMALL(vlo, vhi)) {
+    char *x = v_to_str(vlo), *y = v_to_str(vhi);
+    rt_die("`sweep` runs from %s up to %s, but both ends must lie between -2^62 and 2^62 - 1", x, y);
+  }
+  int64_t lo = SMALLN(vlo), hi = SMALLN(vhi), count = 0;
+  int blocked = (rt_jobs > 1 || rt_save_path) && !rt_sweep_depth && !rt_in_worker && !rt_world_mode && hi > lo;
+  rt_sweep_depth++;
+  if (!blocked) {
+    if (hi > lo) count = sweep_run(pid, fn, name, lo, hi, sp);
+    rt_sweep_depth--;
+    ENSURE(sp + 1); S[sp] = MKV(count);
+    return sp + 1;
+  }
+  long no = rt_sweep_no++;
+  int64_t span = hi - lo, nb = span < SWEEP_BLOCKS ? span : SWEEP_BLOCKS, i = 0;
+#define BLOCK_A(k) (lo + (int64_t)((__int128)span * (k) / nb))
+  /* blocks finished in a saved run come back first, words and all */
+  while (i < nb && saved_pos < saved_n) {
+    SaveRec *r = &saved[saved_pos];
+    if (r->no != no || r->lo != lo || r->hi != hi || r->a != BLOCK_A(i) || r->b != BLOCK_A(i + 1)) { save_forget_rest(); break; }
+    rt_out(r->out, r->len); count += r->count; saved_pos++; i++;
+  }
+  if (i < nb) save_forget_rest();
+#ifndef _WIN32
+  if (rt_jobs > 1) {
+    int64_t first = i, next = i, emit = i, window = (int64_t)rt_jobs * 4;
+    Worker *w = (Worker *)calloc((size_t)nb, sizeof(Worker));
+    int running = 0;
+    sw_w = w;
+    signal(SIGCHLD, SIG_DFL); /* if SIGCHLD came in ignored, finished workers would vanish before wait() saw them */
+    while (emit < nb) {
+      sw_from = emit; sw_to = next;
+      while (running < rt_jobs && next < nb && next - emit < window) {
+        fflush(stdout);
+        if (save_fh) fflush(save_fh);
+        FILE *f = tmpfile();
+        if (!f) rt_die("couldn't make a scratch file for a sweep worker");
+        pid_t p = fork();
+        if (p < 0) rt_die("couldn't start a sweep worker (fork failed)");
+        if (p == 0) {
+          rt_in_worker = 1; rt_capture = 1; wbuf_len = 0; rt_child_fd = fileno(f);
+          int64_t c = sweep_run(pid, fn, name, BLOCK_A(next), BLOCK_A(next + 1), sp);
+          uint64_t len = wbuf_len;
+          rt_write_all(rt_child_fd, &c, 8); rt_write_all(rt_child_fd, &len, 8); rt_write_all(rt_child_fd, wbuf, wbuf_len);
+          _exit(0);
+        }
+        w[next].pid = p; w[next].f = f; running++; next++; sw_to = next;
+      }
+      while (emit < next && w[emit].done) {
+        sweep_take(&w[emit], &count, no, lo, hi, BLOCK_A(emit), BLOCK_A(emit + 1));
+        emit++; sw_from = emit;
+      }
+      if (emit >= nb) break;
+      if (emit == next) continue; /* every launched block is in: launch more before waiting */
+      int status = 0;
+      pid_t p;
+      do p = wait(&status); while (p < 0 && errno == EINTR);
+      if (p < 0) rt_die("lost track of the sweep workers (%s)", strerror(errno));
+      for (int64_t k = emit; k < next; k++)
+        if (w[k].pid == p) {
+          w[k].done = 1; w[k].status = status; running--;
+          if (!WIFEXITED(status) || (WEXITSTATUS(status) != 0 && WEXITSTATUS(status) != 1)) {
+            for (int64_t j = emit; j < k; j++) if (!w[j].done) { int st; waitpid(w[j].pid, &st, 0); w[j].done = 1; }
+            for (int64_t j = emit; j < k; j++) sweep_take(&w[j], &count, no, lo, hi, BLOCK_A(j), BLOCK_A(j + 1));
+            rt_die("a sweep worker crashed (n from %lld to %lld)", (long long)BLOCK_A(k), (long long)(BLOCK_A(k + 1) - 1));
+          }
+          break;
+        }
+    }
+    (void)first;
+    sw_w = NULL;
+    free(w);
+    i = nb;
+  }
+#endif
+  for (; i < nb; i++) { /* one core, saving each block as it finishes */
+    int64_t a = BLOCK_A(i), b = BLOCK_A(i + 1);
+    rt_capture = 1; wbuf_len = 0;
+    int64_t c = sweep_run(pid, fn, name, a, b, sp);
+    rt_capture = 0;
+    fwrite(wbuf, 1, wbuf_len, stdout); fflush(stdout);
+    save_block(no, lo, hi, a, b, c, wbuf, wbuf_len);
+    wbuf_len = 0;
+    count += c;
+  }
+#undef BLOCK_A
+  rt_sweep_depth--;
+  ENSURE(sp + 1); S[sp] = MKV(count);
+  return sp + 1;
+}
+
 static void rt_dotpearls(void) {
   int64_t total = 0; char tmp[48];
   for (int i = 0; i < N_PEARL_WORDS; i++) total += shells[i].n;
@@ -734,6 +1142,7 @@ static V *rt_consts = NULL; static int rt_nconsts = 0;
 static void mark(V v) { if (!ISSMALL(v)) { Big *b = BIGP(v); if (!b->mark) b->mark = 1; } }
 static V best_score = 0;
 static void gc_run(long sp) {
+  divc_a = divc_q = NULL;
   for (long i = 0; i < sp; i++) mark(S[i]);
   for (int64_t j = 0; j < (int64_t)bed_size; j++) mark(bed[j]);
   for (int64_t i = 0; i < hb_cap; i++) if (hb[i].full) mark(hb[i].val);
@@ -762,11 +1171,42 @@ static void rt_reset_world(void) {
 static long trawl_main(long sp);
 static void trawl_init_consts(void);
 
-int main(void) {
+static void rt_usage(void) {
+  fputs("usage: this program [--jobs N] [--save FILE]\n"
+        "  --jobs N    run each top-level `sweep` on N cores (0 = all of them); output stays in order\n"
+        "  --save FILE keep finished sweep blocks in FILE; run again with the same FILE to resume\n", stderr);
+}
+static void rt_args(int argc, char **argv) {
+  for (int i = 1; i < argc; i++) {
+    const char *a = argv[i], *v = NULL;
+    if (!strcmp(a, "--help") || !strcmp(a, "-h")) { rt_usage(); exit(0); }
+    if (!strncmp(a, "--jobs=", 7)) v = a + 7;
+    else if (!strcmp(a, "--jobs") || !strcmp(a, "-j")) { if (i + 1 >= argc) { rt_usage(); exit(2); } v = argv[++i]; }
+    if (v) {
+      char *end; long j = strtol(v, &end, 10);
+      if (*end || j < 0) { fprintf(stderr, "~ --jobs wants a whole number of cores, not %s\n", v); exit(2); }
+#ifndef _WIN32
+      if (j == 0) { long c = sysconf(_SC_NPROCESSORS_ONLN); j = c > 0 ? c : 1; }
+#else
+      if (j != 1) fprintf(stderr, "~ note: --jobs needs fork, which Windows doesn't have, so this runs on one core\n");
+      j = 1;
+#endif
+      rt_jobs = j > 1024 ? 1024 : (int)(j ? j : 1);
+      continue;
+    }
+    if (!strncmp(a, "--save=", 7)) { rt_save_path = a + 7; continue; }
+    if (!strcmp(a, "--save")) { if (i + 1 >= argc) { rt_usage(); exit(2); } rt_save_path = argv[++i]; continue; }
+    fprintf(stderr, "~ unknown option %s\n", a); rt_usage(); exit(2);
+  }
+}
+
+int main(int argc, char **argv) {
   static char obuf[1 << 16];
   setvbuf(stdout, obuf, _IOFBF, sizeof obuf);
+  rt_args(argc, argv);
   rt_grow(1024); bed_init(BED_INIT);
   trawl_init_consts();
+  if (rt_save_path && !rt_world_mode) save_open();
   if (!rt_world_mode) {
     trawl_main(0);
     rt_out("\n", 1);

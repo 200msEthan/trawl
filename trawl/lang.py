@@ -19,13 +19,13 @@ NUMBERS = ["digsum", "altsum", "power", "prime", "spf"]
 YOURS_WINS = {"prime", "spf"}
 ECHO = ["echo", "hush"]
 WORLDS = ["wave", "want", "more", "aim", "worlds"]
-SYNTAX = ["if", "else", "then", "[", "]", ":", ";", "use", "pearl"]
+SYNTAX = ["if", "else", "then", "[", "]", ":", ";", "use", "pearl", "sweep"]
 BUILTINS = ARITH + STACK + OUTPUT + SEABED + NUMBERS + ECHO + WORLDS + SYNTAX
 
 # How many numbers each word takes off the stack (for error messages and the compiler).
 WANTS = {**{w: 2 for w in ARITH}, "dup": 1, "drop": 1, "swap": 2, "over": 2, "rot": 3,
          ".": 1, "emit": 1, "bury": 2, "dig": 1, "digsum": 2, "altsum": 2, "power": 2, "prime": 1, "spf": 1,
-         "echo": 2, "wave": 2, "want": 1, "aim": 1, "if": 1}
+         "echo": 2, "wave": 2, "want": 1, "aim": 1, "if": 1, "sweep": 2}
 
 EXTENSIONS = (".trawl", ".tide")
 LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib")
@@ -82,6 +82,13 @@ class Def:
 
 @dataclass
 class PearlDecl:
+    name: str
+    tok: Tok
+
+
+@dataclass
+class Sweep:
+    """`lo hi sweep name`: run name on every n from lo up to hi - 1 and count the nonzero answers."""
     name: str
     tok: Tok
 
@@ -170,6 +177,11 @@ class Parser:
                 if self.i >= len(self.toks):
                     raise TrawlError(f"{where(t)}: `pearl` needs the name of a word after it")
                 body.append(PearlDecl(self.toks[self.i].text, t))
+                self.i += 1
+            elif s == "sweep":
+                if self.i >= len(self.toks) or self.toks[self.i].text in BUILTINS or NUMBER.match(self.toks[self.i].text):
+                    raise TrawlError(f"{where(t)}: `sweep` needs the name of one of your words after it, like `1 1000 sweep good?`")
+                body.append(Sweep(self.toks[self.i].text, t))
                 self.i += 1
             elif s in ("]", "else", "then", ";"):
                 raise TrawlError(f"{where(t)}: a stray `{s}` with nothing open for it to close")

@@ -6,13 +6,14 @@ instead of memory, so `dup * 1 +` turns into a few register operations. Numbers 
 62-bit machine words that switch to exact big numbers on overflow (trawl_rt.h), so the
 native build prints exactly what the reference interpreter prints.
 """
+import hashlib
 import os
 import re
 import shutil
 import subprocess
 import tempfile
 
-from .lang import (Def, If, Loop, Num, PearlDecl, Program, Text, TrawlError, WANTS, Word,
+from .lang import (Def, If, Loop, Num, PearlDecl, Program, Sweep, Text, TrawlError, WANTS, Word,
                    BUILTINS, YOURS_WINS, suggest, where)
 
 RUNTIME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime")
@@ -220,6 +221,8 @@ class Gen:
                 out.append(":" + n.name + "(" + self.shape(n.body) + ")")
             elif isinstance(n, PearlDecl):
                 out.append("pearl " + n.name)
+            elif isinstance(n, Sweep):
+                out.append("sweep " + n.name)
         return " ".join(out)
 
     def fn_name(self, i):
@@ -235,7 +238,7 @@ class Gen:
             size = 0
             for node in body:
                 size += 1
-                if isinstance(node, Word):
+                if isinstance(node, (Word, Sweep)):
                     j = self.resolve(node.name, i + 1, False)
                     if j is not None:
                         calls[i].add(j)
@@ -273,7 +276,7 @@ class Gen:
         order = sorted(range(n), key=lambda i: len(calls[i]))
         for _ in range(3):  # leaves first, then words built from them
             for i in order:
-                if self.inline[i] or not plain[i] or self.prog.defs[i].name in self.pearl_names or reaches(i):
+                if self.inline[i] or not plain[i] or self.prog.defs[i].name in self.pearl_names or self.prog.defs[i].name in self.sweep_names or reaches(i):
                     continue
                 total.clear()
                 if expanded(i) <= 80:
@@ -287,7 +290,7 @@ class Gen:
             for n in body:
                 if isinstance(n, Def) and top:
                     at += 1
-                elif isinstance(n, Word):
+                elif isinstance(n, (Word, Sweep)):
                     j = self.resolve(n.name, at, top)
                     if j is not None and j not in seen:
                         seen.add(j)
@@ -326,6 +329,8 @@ class Gen:
                 self.loop(f, node, at, top_level)
             elif k is Word:
                 self.word(f, node, self.at(at, top_level), top_level)
+            elif k is Sweep:
+                self.sweep(f, node, self.at(at, top_level), top_level)
 
     def at(self, at, top_level):
         return self.def_seen if top_level else at
@@ -404,6 +409,21 @@ class Gen:
             f.emit(f"sp = rt_call_pearl({pid}, {fn}, {c_string(t)}, sp);")
         else:
             f.emit(f"sp = {fn}(sp);")
+        f.reload()
+        f.known = 0
+
+    def sweep(self, f, node, at, top_level):
+        t = node.name
+        target = self.resolve(t, at, top_level)
+        f.flush()
+        if target is None:
+            f.emit(f"if (sp < 2) rt_underflow(\"sweep\", 2);")
+            msg = f"{where(node.tok)}: nobody in the sea knows the word `{t}` yet, so `sweep` can't run it."
+            f.emit(f"rt_die(\"%s\", {c_string(msg)});")
+            return
+        f.spill()
+        pid = self.pearl_ids.setdefault(t, len(self.pearl_ids)) if t in self.pearl_names else -1
+        f.emit(f"sp = rt_sweep({pid}, {self.fn_name(target)}, {c_string(t)}, sp);")
         f.reload()
         f.known = 0
 
@@ -522,6 +542,8 @@ class Gen:
         for n in nodes:
             if isinstance(n, PearlDecl):
                 self.pearl_names.add(n.name)
+            elif isinstance(n, Sweep):
+                self.sweep_names.add(n.name)
             for sub in (getattr(n, "body", None), getattr(n, "then", None), getattr(n, "other", None)):
                 if isinstance(sub, list):
                     self.pearl_scan(sub)
@@ -544,7 +566,7 @@ class Gen:
         return [ln.replace("@@GLO@@", str(glo)).replace("@@GHI@@", str(ghi)) for ln in out]
 
     def generate(self):
-        self.pearl_names = set()
+        self.pearl_names, self.sweep_names = set(), set()
         self.pearl_scan(self.prog.body)
         for d in self.prog.defs:
             self.pearl_scan(d.body)
@@ -570,8 +592,7 @@ class Gen:
         lo = min(self.direct, default=0)
         hi = max(self.direct, default=0)
         off = max(4096, -lo + 1)
-        out = [f"/* made by the Trawl compiler from {os.path.basename(self.file)}. edit the .trawl file, not this one. */",
-               f"#define BED_OFF {off}",
+        out = [f"#define BED_OFF {off}",
                f"#define BED_INIT {max(65536, off + hi + 1)}",
                f"#define N_PEARL_WORDS {max(1, len(self.pearl_ids))}",
                '#include "trawl_rt.h"',
@@ -589,7 +610,10 @@ class Gen:
         out.append("static long trawl_main(long sp) {")
         out += self.render(main.lines)
         out.append("}")
-        return "\n".join(out) + "\n"
+        code = "\n".join(out) + "\n"
+        stamp = hashlib.sha256(code.encode()).hexdigest()[:16]  # a save file only resumes the program that wrote it
+        return (f"/* made by the Trawl compiler from {os.path.basename(self.file)}. edit the .trawl file, not this one. */\n"
+                f'#define TRAWL_PROG_HASH "{stamp}"\n' + code)
 
 
 def to_c(prog, file="<program>"):

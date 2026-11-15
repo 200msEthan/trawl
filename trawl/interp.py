@@ -12,7 +12,7 @@ import sys
 if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)  # Trawl numbers can have any number of digits
 
-from .lang import (Def, If, Loop, Num, PearlDecl, Program, Text, TrawlError, WANTS, Word,
+from .lang import (Def, If, Loop, Num, PearlDecl, Program, Sweep, Text, TrawlError, WANTS, Word,
                    parse, suggest)
 
 
@@ -90,6 +90,8 @@ class Sea:
                 self.words[node.name] = node.body
             elif k is PearlDecl:
                 self.pearls.setdefault(node.name, {})
+            elif k is Sweep:
+                self.sweep(node)
 
     def loop(self, node):
         seen = set()
@@ -104,6 +106,23 @@ class Sea:
                 if len(seen) < 50_000:
                     seen.add(sea)
             self.exec(node.body)
+
+    def sweep(self, node):
+        name, st = node.name, self.stack
+        hi, lo = self.pop("sweep", 2), self.pop("sweep", 2)
+        if name not in self.words:
+            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{name}` yet, so `sweep` can't run it.")
+        check_sweep_range(lo, hi)
+        call, count = Word(name, node.tok), 0
+        for n in range(lo, hi):
+            depth = len(st)
+            st.append(n)
+            self.word(call)
+            if len(st) != depth + 1:
+                raise TrawlError(sweep_shape_error(name, n, len(st) - depth))
+            if st.pop():
+                count += 1
+        st.append(count)
 
     def word(self, node):
         t, st = node.name, self.stack
@@ -290,6 +309,19 @@ def smallest_prime_factor(n):
 def _where(node):
     import os
     return f"{os.path.basename(node.tok.file)}:{node.tok.line}: "
+
+
+SWEEP_MIN, SWEEP_MAX = -(1 << 62), (1 << 62) - 1
+
+
+def check_sweep_range(lo, hi):
+    if not (SWEEP_MIN <= lo <= SWEEP_MAX and SWEEP_MIN <= hi <= SWEEP_MAX):
+        raise TrawlError(f"`sweep` runs from {lo} up to {hi}, but both ends must lie between -2^62 and 2^62 - 1")
+
+
+def sweep_shape_error(name, n, got):
+    return (f"`sweep {name}` wants `{name}` to turn each n into one answer, "
+            f"but at n = {n} it left {got} number{'s' if got != 1 else ''} in its place")
 
 
 def uses_worlds(prog):

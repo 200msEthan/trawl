@@ -90,6 +90,7 @@ The words that make Trawl what it is:
 | `wave` `want` `more` `aim` | `1 9 wave` guesses a number; `want` rewinds to try the next guess when a condition fails; `more` collects every answer; `aim` keeps the best |
 | `pearl` | `pearl fib` makes a word remember its answers |
 | `digsum` `altsum` | digit sums in any base |
+| `sweep` | `1 1000000 sweep good?` runs `good?` on every n and counts the hits. Built programs share it out with `--jobs 8` (same output, in order) and pick a stopped run back up with `--save run.sav` |
 | `prime` `spf` | primality and the smallest prime factor, built in and fast: they make the Erdős 727 search 14 times faster than PARI/GP's `factor()` ([benchmarks/vs](benchmarks/vs)) |
 
 ```

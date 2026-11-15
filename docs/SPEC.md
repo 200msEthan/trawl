@@ -16,7 +16,7 @@ A program is text. It is split into **tokens** at whitespace. There are four kin
 | number | `42`, `-7`, `+3`, `1_000_000` | push that whole number |
 | text | `." hello sea"` | print the text (leading spaces after `."` are dropped) |
 | word | `dup`, `digsum`, `my-word` | do what the word says |
-| structure | `:` `;` `[` `]` `if` `else` `then` `use` `pearl` | shape the program |
+| structure | `:` `;` `[` `]` `if` `else` `then` `use` `pearl` `sweep` | shape the program |
 
 - `#` starts a comment that runs to the end of the line, **except** on a line that also
   contains `."` text. (This keeps `#` usable inside printed text. Put comments on their
@@ -163,7 +163,42 @@ and leave one; after `pearl name`, asking it the same number again gives the rem
 answer without running it. Pearls work through recursion, so
 `: fib dup 2 < if else dup 1 - fib swap 2 - fib + then ; pearl fib` makes `90 fib` instant.
 
-## 13. Errors
+## 13. Sweep: every n, on every core
+
+`lo hi sweep name` runs the word `name` on every n from `lo` up to `hi - 1`, in order, and
+leaves how many of them gave a nonzero answer. `name` must be one of your own words, it must
+turn n into exactly one number (its answer), and it must not touch the stack below n.
+Anything it prints comes out in n order. `lo >= hi` sweeps nothing and leaves 0. Both ends
+must lie between -2^62 and 2^62 - 1.
+
+```
+: sq? dup * 1 + prime ;
+1 100 sweep sq? .     # 19: the n below 100 with n^2 + 1 prime
+```
+
+`sweep` is how a search says "these checks don't depend on each other", so the native
+engine can share them out and pick them up again:
+
+- **`--jobs N`** runs each sweep on N cores (`0` means all of them):
+  `trawl fast hunt.trawl --jobs 8`, or `./hunt --jobs 8` for a built program. The range is cut
+  into 256 blocks; each block runs in its own copy of the sea, and its printed words come out
+  in n order, so the output is exactly what one core prints.
+- **`--save FILE`** writes each finished block (its count and its printed words) to FILE.
+  Stop the run at any point and start the same command again: finished blocks are replayed
+  from FILE, and only the rest are run. FILE only resumes the program that wrote it; a changed
+  program starts over (and says so).
+
+**The rule that makes this safe:** a block's changes to the seabed and to pearls stay in its
+own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
+swept word should set every seabed cell it reads before it reads it. Scratch cells are fine;
+a running total kept in the seabed across calls is not (use the count, or print the finds).
+
+Only sweeps that are not inside another sweep are shared out; a sweep inside a swept word
+just runs. Programs that use worlds (`wave`, `want`, `more`, `aim`) run their sweeps on one
+core without saving. On Windows, which has no `fork`, `--jobs` runs on one core. The
+interpreter (`trawl run`) always runs sweeps in order, on one core.
+
+## 14. Errors
 
 Errors stop the program and print one line starting with `~`. The wording is part of the
 language and the same in both engines, for example:
@@ -173,9 +208,10 @@ language and the same in both engines, for example:
 - `base 1 has no digits. try 2 or more.`
 - `tide numbers are whole: 2 to the power -1 would be a fraction`
 - `nobody in the sea knows the word `flod`. did you mean `fold`?`
+- `` `sweep two` wants `two` to turn each n into one answer, but at n = 1 it left 2 numbers in its place``
 - `the tide is stuck: this loop came back to the exact same sea [...], so it can never end` (interpreter only, see below)
 
-## 14. The two engines
+## 15. The two engines
 
 **`trawl run`** (reference interpreter, Python) checks two extra things:
 
