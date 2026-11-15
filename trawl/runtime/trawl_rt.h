@@ -1076,6 +1076,7 @@ static long rt_sweep(int pid, WordFn fn, const char *name, long sp) {
         emit++; sw_from = emit;
       }
       if (emit >= nb) break;
+      if (emit == next) continue; /* every launched block is in: launch more before waiting */
       int status = 0;
       pid_t p;
       do p = wait(&status); while (p < 0 && errno == EINTR);

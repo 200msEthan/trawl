@@ -272,6 +272,18 @@ def test_sweep_on_many_cores_matches_one_core(tmp_path):
 
 
 @needs_cc
+def test_sweep_keeps_going_when_every_running_block_is_done(tmp_path):
+    # block 0 is slow, the rest are instant: the workers ahead fill the window and finish, then block 0
+    # finishes too, and the runner must start more workers instead of waiting for ones that don't exist
+    src = ": w? dup 0 = if 30000000 [ 1 - ] drop then 2 % ; 0 256 sweep w? ."
+    exe = str(tmp_path / ("sk" + (".exe" if os.name == "nt" else "")))
+    build(parse(src), exe)
+    for jobs in ("2", "3"):
+        r = subprocess.run([exe, "--jobs", jobs], capture_output=True, text=True, timeout=300)
+        assert (r.returncode, r.stdout, r.stderr) == (0, "128 \n", ""), jobs
+
+
+@needs_cc
 def test_sweep_stops_cleanly_when_a_block_fails(tmp_path):
     src = ": f? dup 1500 = if 0 0 / then dup 250 % 0 = if dup . then drop 1 ; 0 3000 sweep f? ."
     exe = str(tmp_path / ("sf" + (".exe" if os.name == "nt" else "")))
