@@ -18,4 +18,4 @@
 # year by year, until echo hears a picture it has heard before
 listen drop
 1 [ drop show year -1 dig 1 + -1 bury listen dup 0 = ] drop
-. ." years is the cycle of the reef. It first came back after " -1 dig . ." years"
+. ." is the cycle of the reef, in years. It first came back after " -1 dig . ." years"

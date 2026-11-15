@@ -12,3 +12,4 @@ use stdlib
 : cell dig over = if 81 else 46 then emit 32 emit ;
 : line 1 [ swap over cell swap 1 + dup n > if drop 0 then ] drop cr ;
 1 [ line 1 + dup n > if drop 0 then ] drop
+n . ." queens on the board, and none of them attack each other" cr

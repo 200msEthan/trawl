@@ -3,5 +3,5 @@
 : zerofree 1 swap [ dup 10 % 0 = if swap drop 0 swap 0 * else 10 / then ] drop ;
 1 1 [ drop
   dup 2 swap power dup zerofree if . ." is 2^" dup . ." and has no 0" 10 emit else drop then
-  1 + dup 300 < ] drop drop
-." Nothing after 2^86, all the way to 2^300. Nobody has proved there are no more."
+  1 + dup 300 < ] drop
+." Checked every power of 2 below 2^" . ." and the last one known with no 0 is still 2^86. Nobody has proved there are no more."

@@ -39,7 +39,7 @@ EXAMPLES = [
      "Start at 1. Each stop adds the square of its digit sum: 1, 2, 6, 42, 78... Where does the river go?",
      "start the river somewhere else and see if it joins the same path."),
     ("zerofree", "Powers of 2 with no zero",
-     "Which powers of 2 have no digit 0? The last known one is 2^86. This hunt checks every power up to 2^300.",
+     "Which powers of 2 have no digit 0? The last known one is 2^86. This hunt checks every power up to the one you pick.",
      "check further. Does another one ever show up?"),
     ("reef", "Echo: when does it repeat?",
      "A ring of 13 reef spots grows by a simple rule each year. The word echo notices when the whole reef "
@@ -51,7 +51,7 @@ EXAMPLES = [
      "try a bigger board. The board is in the full printout below."),
     ("pearls", "Pearls: remembered answers",
      "slow-fib asks itself the same question millions of times. A pearled word remembers each answer, so "
-     "Fibonacci number 90 comes back instantly.",
+     "even a huge Fibonacci number comes back instantly.",
      "ask for a much bigger Fibonacci number."),
     ("orbit", "Whirlpools: x squared mod 31",
      "Keep squaring and taking the remainder mod 31. Every start falls into a loop. orbit tells you how long "
@@ -79,9 +79,9 @@ KNOBS = {
     "zerofree": [("Check powers of 2 up to", "dup # <", 10, 3000, 10)],
     "reef": [("Reef size", ": n # ;", 3, 40, 1)],
     "queens": [("Board size", ": n # ;", 4, 8, 1)],
-    "pearls": [("Which Fibonacci number", "# kind-fib .", 1, 300, 1)],
+    "pearls": [("Which Fibonacci number", "# dup kind-fib .", 1, 300, 1)],
     "orbit": [("Remainder after dividing by", "* # %", 2, 500, 1), ("Starts up to", "dup # <", 3, 200, 1)],
-    "a343507": [("n", "# a .", 1, 3, 1)],
+    "a343507": [("n", "# dup a .", 1, 3, 1)],
     "k4": [("Check t up to", "dup # <", 70, 600, 10)],
 }
 for i, *_ in EXAMPLES:

@@ -106,6 +106,7 @@ details.log summary { cursor: pointer; padding: 9px 14px; font-size: 12px; lette
 #out .err { color: var(--err); }
 .alert { margin: 0 12px 12px; padding: 10px 14px; border-radius: 10px; background: rgba(255, 154, 133, .1); border: 1px solid rgba(255, 154, 133, .35); color: var(--err); font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .alert[hidden] { display: none; }
+.jump { display: none; padding: 10px 14px 12px; font-size: 14px; border-top: 1px solid var(--edge); text-decoration: none; }
 
 .cheat { margin-top: 16px; }
 .cheat details { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; padding: 10px 16px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
@@ -117,21 +118,39 @@ footer { margin-top: 16px; color: var(--faint); font-size: 13px; }
 footer code { font-family: var(--mono); color: var(--muted); }
 
 @media (max-width: 820px) {
-  .wrap { padding: 0 14px 24px; }
-  header { gap: 8px; }
-  .brand { width: 100%; }
-  #examples { flex: 1 1 100%; min-width: 0; }
-  header button { flex: 1 1 0; padding-left: 8px; padding-right: 8px; }
-  .tag { font-size: 15px; margin-bottom: 12px; }
-  .callout p { font-size: 15px; }
-  .deck { grid-template-columns: 1fr; }
+  /* phones: the first screen holds the explainer, the slider and the catches */
+  .wrap { padding: 0 12px 24px; }
+  header { gap: 8px; padding: 10px 0 8px; }
+  .brand { margin-right: auto; }
+  .brand h1 { font-size: 19px; }
+  .brand span { display: none; }
+  header button { min-height: 36px; padding: 5px 10px; font-size: 13px; }
+  #examples { order: 10; flex: 1 1 100%; min-width: 0; min-height: 38px; }
+  .tag { display: none; }
+  .deck { grid-template-columns: 1fr; gap: 12px; }
+  .deck > .about { order: -2; padding: 10px 12px; }
+  .about h2 { font-size: 14px; margin: 0 0 2px; }
+  .about p { font-size: 14px; line-height: 1.4; }
+  .about #about-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+  .about.open #about-text { display: block; }
+  .about p.try { font-size: 13px; margin-top: 4px; }
   .sonar { order: -1; min-height: 0; }
   .code-panel { order: 1; }
-      #catches { max-height: 320px; }
-  .catch .num { font-size: 21px; }
-  .catch .num.long { font-size: 15px; }
+  .panel-head { padding: 7px 12px; }
+  .callout { margin: 10px 10px 0; padding: 10px 12px; }
+  .callout p { font-size: 14px; }
+  .knobs { padding: 8px 12px 0; gap: 6px; }
+  .knob .val output { font-size: 20px; }
+  .counter { padding: 6px 12px 0; }
+  .counter strong { font-size: 24px; }
+  #catches { max-height: 240px; padding: 6px 10px 10px; gap: 6px; }
+  .catch { padding: 8px 12px; }
+  .catch .num { font-size: 19px; }
+  .catch .num.long { font-size: 14px; }
+  .catch .say { font-size: 13px; }
   textarea { min-height: 260px; }
   .hide-sm { display: none; }
+  .jump { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .code-panel, .catch { transition: none; animation: none; }
@@ -145,7 +164,7 @@ footer code { font-family: var(--mono); color: var(--muted); }
   <header>
     <div class="brand"><h1>Trawl</h1><span>playground · v@@VERSION@@</span></div>
     <select id="examples" aria-label="Pick a hunt"></select>
-    <button id="sound" aria-pressed="false" title="Sound on or off">Tap for sound</button>
+    <button id="sound" aria-pressed="false" title="Sound on or off">Sound</button>
     <button id="share" title="Copy a link to this program">Copy link</button>
     <button id="run" class="primary" disabled>Diving…</button>
   </header>
@@ -154,7 +173,7 @@ footer code { font-family: var(--mono); color: var(--muted); }
 
   <main class="deck">
     <div class="about" id="about"><h2 id="about-title"></h2><p id="about-text"></p><p class="try" id="about-try"></p></div>
-    <section class="panel code-panel" aria-label="Program">
+    <section class="panel code-panel" id="code-panel" aria-label="Program">
       <div class="panel-head"><b>The program</b><span class="keys hide-sm"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs it</span></div>
       <div class="editor"><pre class="hl" id="hl" aria-hidden="true"></pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Trawl program"></textarea></div>
     </section>
@@ -166,6 +185,7 @@ footer code { font-family: var(--mono); color: var(--muted); }
       <ol id="catches" aria-live="polite" data-empty="Every line the program prints that starts with a number shows up here as a catch."></ol>
       <div class="alert" id="alert" role="alert" hidden></div>
       <details class="log" open><summary>Everything it printed</summary><pre id="out"></pre></details>
+      <a class="jump" href="#code-panel">See the code ↓</a>
     </section>
   </main>
 
@@ -260,7 +280,7 @@ class SonarSea(Sea):
             now = time.time()
             if now - self.last > 0.06:
                 self.last = now
-                post_sonar("|".join(brief(v) for v in self.stack[:1] + self.stack[-1:]))
+                post_sonar("|".join([str(self.steps)] + [brief(v) for v in self.stack[:1] + self.stack[-1:]]))
         return Sea.exec(self, body)
 
 def go(src):
@@ -401,7 +421,7 @@ function pingSound() {
 }
 const soundBtn = document.getElementById("sound");
 function updateSoundButton() {
-  soundBtn.textContent = !soundOn ? "Sound off" : audio ? "Sound on" : "Tap for sound";
+  soundBtn.textContent = !soundOn ? "Sound off" : audio ? "Sound on" : "Sound";
   soundBtn.setAttribute("aria-pressed", String(soundOn && !!audio));
 }
 soundBtn.addEventListener("click", () => {
@@ -437,7 +457,7 @@ function lockOn(el, value) { // the number scrambles, then locks on digit by dig
 }
 function addCatch(line, label) {
   const m = line.match(/^\s*(?:[A-Za-z]\w{0,3} = )?(-?\d+)/);
-  if (!m) return;
+  if (!m) return false;
   const n = m[1];
   if (!label) setCount(count + 1);
   const li = document.createElement("li"); li.className = "catch fresh" + (label ? " find" : "");
@@ -459,6 +479,7 @@ function addCatch(line, label) {
   pingSound();
   streamNumber(n, true);
   if (intro.on) introCatch();
+  return true;
 }
 function takeOutput(text) {
   out.append(document.createTextNode(text));
@@ -473,7 +494,7 @@ function finishLine() { if (lineBuf) { catchQueue.push(lineBuf); lineBuf = ""; }
 const catchQueue = [];
 setInterval(() => {
   const n = catchQueue.length > 30 ? 4 : catchQueue.length > 10 ? 2 : 1;
-  for (let i = 0; i < n && catchQueue.length; i++) addCatch(catchQueue.shift());
+  for (let i = 0; i < n && catchQueue.length; ) if (addCatch(catchQueue.shift())) i++; // lines without a catch don't wait their turn
 }, 150);
 
 /* ---------------------------------------------------------------- running */
@@ -547,9 +568,14 @@ function startWorker() {
     } else if (m.type === "out") {
       takeOutput(m.text);
     } else if (m.type === "sonar") {
-      const parts = m.text.split("|");
+      const [steps, ...parts] = m.text.split("|");
       for (const n of parts) if (!n.includes("digit")) streamNumber(n, false);
-      $("now").textContent = parts[0] ? "now at " + (parts[0].includes("digit") ? "a " + parts[0] : Number(parts[0]).toLocaleString("en-US")) : "";
+      // show where the hunt is; if that number isn't moving, show the work instead, so it never looks stuck
+      const at = parts[0] || "", t = performance.now();
+      if (at !== nowAt.value) { nowAt.value = at; nowAt.since = t; }
+      const fmt = (x) => x.includes("digit") ? "a " + x : Number(x).toLocaleString("en-US");
+      $("now").textContent = at && t - nowAt.since < 1500 ? "now at " + fmt(at)
+        : (Number(steps) / 1e6).toFixed(1) + " million steps so far";
     } else if (m.type === "done") {
       running = false; runBtn.textContent = "Run"; runBtn.classList.remove("stop");
       $("now").textContent = "";
@@ -677,6 +703,9 @@ function rerun() {
   runProgram();
 }
 let pendingRun = false, runId = 0;
+const nowAt = { value: "", since: 0 };
+$("about-text").addEventListener("click", () => $("about").classList.toggle("open"));
+document.querySelector(".jump").addEventListener("click", (e) => { e.preventDefault(); $("code-panel").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth" }); });
 function loadExample(ex) { pick.value = ex.id; code.value = ex.src; showAbout(ex); renderKnobs(ex); paintCode(); }
 pick.addEventListener("change", () => {
   const ex = EXAMPLES.find((x) => x.id === pick.value);
@@ -695,7 +724,7 @@ $("share").addEventListener("click", async () => {
 function loadFromHash() {
   const h = location.hash.slice(1);
   if (h.startsWith("code=")) {
-    try { code.value = decode(h.slice(5)); showAbout(null); renderKnobs(null); paintCode(); pick.selectedIndex = -1; endIntro(false); $("find").hidden = true; return; } catch {}
+    try { code.value = decode(h.slice(5)); showAbout(null); renderKnobs(null); paintCode(); pick.selectedIndex = -1; endIntro(); $("callout").hidden = true; return; } catch {}
   }
   loadExample(EXAMPLES.find((x) => x.id === h) || EXAMPLES[0]);
 }

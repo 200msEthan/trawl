@@ -13,5 +13,4 @@ use numbers
   -4 dig ;
 # a: try k = 0, 1, 2, ... until one fits
 : a -5 bury 0 1 [ drop dup -5 dig fits if 0 else 1 + 1 then ] drop ;
-2 a . ." is the least k for n = 2" 10 emit
-# Try 3 a . too: it gives 3475, but takes several seconds here.
+2 dup a . ." is the least k for n = " . 10 emit
