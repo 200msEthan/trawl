@@ -1,0 +1,8 @@
+# Whirlpools: keep squaring a number and taking the remainder mod 31.
+# Every start falls into a loop sooner or later. `orbit` says how long the
+# lead-in (the tail) is and how long the loop is.
+: step dup * 31 % ;
+use orbits
+2 1 [ drop
+  dup . ." falls into a loop of length " dup orbit . ." after a tail of " . 10 emit
+  1 + dup 13 < ] drop drop

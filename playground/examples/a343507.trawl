@@ -1,0 +1,17 @@
+# a(n) = the least k with ((k+n)!)^2 dividing (2k)!   (OEIS A343507, Erdős problem 727)
+# fits: for every prime p up to k+n, the power of p in (2k)! must be at least
+# twice its power in (k+n)!. Cells: -2 k+n, -3 2k, -4 verdict, -6 p.
+use numbers
+: fits
+  over + -2 bury  2 * -3 bury  1 -4 bury  2 -6 bury
+  1 [ drop
+    -6 dig prime if
+      -3 dig -6 dig legendre  -2 dig -6 dig legendre 2 *  < if 0 -4 bury then
+    then
+    -6 dig 1 + -6 bury
+    -6 dig -2 dig > 0 =  -4 dig * ] drop
+  -4 dig ;
+# a: try k = 0, 1, 2, ... until one fits
+: a -5 bury 0 1 [ drop dup -5 dig fits if 0 else 1 + 1 then ] drop ;
+2 a . ." is the least k for n = 2" 10 emit
+# Try 3 a . too: it gives 3475, but takes several seconds here.

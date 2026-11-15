@@ -1,0 +1,9 @@
+# Collatz: halve even numbers, turn odd n into 3n+1, and count the steps down to 1.
+# Which starting numbers take longer than every smaller number?
+: steps 0 swap dup 1 - [ drop dup 2 % if 3 * 1 + else 2 / then swap 1 + swap dup 1 - ] drop drop ;
+1 -1 bury
+3 1 [ drop
+  dup steps dup -1 dig > if
+    dup -1 bury over . ." takes " . ." steps to fall to 1, a new record" 10 emit
+  else drop then
+  1 + dup 10000 < ] drop drop

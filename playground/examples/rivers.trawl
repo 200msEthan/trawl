@@ -1,0 +1,5 @@
+# A digit river: from x, flow to x + (digit sum of x)^2. Follow the river that starts at 1.
+: flow dup 10 digsum dup * + ;
+1 1 1 [ drop
+  over . ." is stop " dup . ." on the river" 10 emit
+  swap flow swap 1 + dup 16 < ] drop drop drop

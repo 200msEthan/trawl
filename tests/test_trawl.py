@@ -255,6 +255,7 @@ def test_big_number_arithmetic_matches_python(native):
 
 
 @needs_cc
+@pytest.mark.slow
 def test_big_numbers_on_the_seabed_survive_garbage_collection(native):
     # 3 million big numbers made and dropped; the ones kept on the seabed must stay right
     src = "1 3000000 [ swap 10 40 power + dup 1 bury swap 1 - ] drop drop 1 dig 10 40 power / ."
@@ -274,14 +275,22 @@ LONG = {"tide2_bigscan", "tide2_climb_run", "tide2_deck_luck", "tide2_deck_still
         "tide2_oferry_b", "tide2_tub2d_luck", "tide2_tub2d_many"}
 
 
+# the quick run checks a sample of the old programs; --all checks every one
+SAMPLE = set(PROGRAMS[::12])
+
+
+def sampled(progs):
+    return [p if p in SAMPLE else pytest.param(p, marks=pytest.mark.slow) for p in progs]
+
+
 @needs_cc
-@pytest.mark.parametrize("prog", PROGRAMS, ids=lambda p: p.stem)
+@pytest.mark.parametrize("prog", sampled(PROGRAMS), ids=lambda p: p.stem)
 def test_old_tide_program_native(native, prog):
     want = (prog.parent / (prog.stem + ".out")).read_text(encoding="utf-8")
     assert native(prog.read_text(encoding="utf-8"), str(prog)) == want
 
 
-@pytest.mark.parametrize("prog", [p for p in PROGRAMS if p.stem not in LONG], ids=lambda p: p.stem)
+@pytest.mark.parametrize("prog", sampled([p for p in PROGRAMS if p.stem not in LONG]), ids=lambda p: p.stem)
 def test_old_tide_program_interpreter(prog):
     want = (prog.parent / (prog.stem + ".out")).read_text(encoding="utf-8")
     assert interp(prog.read_text(encoding="utf-8"), str(prog)) == want
@@ -301,6 +310,7 @@ def test_example_same_on_both_engines(native, name):
 
 
 @needs_cc
+@pytest.mark.slow
 def test_a343507_reproduces_the_published_terms(native):
     path = ROOT / "examples" / "a343507.trawl"
     src = path.read_text(encoding="utf-8") + "\n2 0 1000 search . 3 0 10000 search . 4 0 10000 search . 5 0 1000000 search . 6 0 10000000 search ."
@@ -311,6 +321,7 @@ ERDOS = ROOT / "examples" / "erdos727"
 
 
 @needs_cc
+@pytest.mark.slow
 def test_erdos727_families_match_an_independent_check(native):
     # counts checked separately in Python with Legendre's formula
     k4 = (ERDOS / "quartic_k4.trawl")
