@@ -1,0 +1,4 @@
+# Count the t below 20000 where Land's family n = 210t^2 + 391t + 179 gives k=3.
+# trawl fast run_k3.trawl
+use land_k3
+0 20000 hunt

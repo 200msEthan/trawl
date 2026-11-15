@@ -1,0 +1,26 @@
+# Johan Land's k=3 family: n = 210t^2 + 391t + 179. Land posted a proof (with Lean) that
+# it gives infinitely many n for k=3; that proof has not been reviewed yet.
+# Source: github.com/beetree/math_erdos_727
+#   n+1 = (6t+5)(35t+36)   n+2 = (t+1)(210t+181)   n+3 = (14t+13)(15t+14)
+# usage at bottom:  T0 T1 hunt   -> prints the count of t with ((n+3)!)^2 | (2n)!
+use judge
+: isqrt -70 bury -70 dig -71 bury
+  -70 dig 1 > if
+    -71 dig -70 dig -71 dig / + 2 / -72 bury
+    -72 dig -71 dig < [ drop
+      -72 dig -71 bury
+      -71 dig -70 dig -71 dig / + 2 / -72 bury
+      -72 dig -71 dig < ] drop
+  then -71 dig ;
+: cells -50 bury
+  -50 dig 6 * 5 + 5001 bury   -50 dig 35 * 36 + 5002 bury
+  -50 dig 1 + 5003 bury       -50 dig 210 * 181 + 5004 bury
+  -50 dig 14 * 13 + 5005 bury -50 dig 15 * 14 + 5006 bury
+  6 -3 bury  -50 dig 210 * 181 + isqrt 1 + -5 bury ;
+: nof dup dup * 210 * swap 391 * + 179 + ;
+: hunt -61 bury -60 bury 0 -62 bury
+  1 [ drop
+    -60 dig cells -60 dig nof judge if -62 dig 1 + -62 bury then
+    -60 dig 1 + -60 bury
+    -60 dig -61 dig < ] drop
+  ." count " -62 dig . ;

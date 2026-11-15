@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trawl Playground</title>
+<meta name="description" content="Write and run Trawl, a small language for hunting patterns in the integers, right in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e5a6b'/%3E%3Cpath d='M5 13c3-3 5-3 8 0s5 3 8 0 5-3 6-1M5 20c3-3 5-3 8 0s5 3 8 0 5-3 6-1' stroke='%23e8f4f2' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f6f4ef; --panel: #fffdf8; --ink: #1d2a2e; --muted: #5d6b6f; --line: #ddd8cc;
+  --accent: #0e5a6b; --accent-ink: #ffffff; --accent-soft: #e2eff0; --err: #a3341f; --ok: #2f6b3a;
+  --code-bg: #fffdf8; --shadow: 0 1px 2px rgba(20,30,30,.06), 0 4px 16px rgba(20,30,30,.05);
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1719; --panel: #152023; --ink: #e3ecea; --muted: #93a5a6; --line: #26363a;
+    --accent: #5cc0c9; --accent-ink: #082024; --accent-soft: #1b3236; --err: #f08a74; --ok: #8fd19b;
+    --code-bg: #121c1f; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1719; --panel: #152023; --ink: #e3ecea; --muted: #93a5a6; --line: #26363a;
+  --accent: #5cc0c9; --accent-ink: #082024; --accent-soft: #1b3236; --err: #f08a74; --ok: #8fd19b;
+  --code-bg: #121c1f; --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+a { color: var(--accent); }
+header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+.brand h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+.brand span { color: var(--muted); font-size: 13px; }
+select, button { font: inherit; font-size: 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 7px 10px; min-height: 38px; }
+button { cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 7px 16px; }
+button:disabled { opacity: .55; cursor: default; }
+button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px; min-height: 0; }
+.pane { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); min-height: 0; overflow: hidden; }
+.pane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.pane-head b { color: var(--ink); font-weight: 600; }
+textarea, pre { font: 14px/1.6 var(--mono); margin: 0; padding: 14px 16px; flex: 1; min-height: 0; }
+textarea { width: 100%; border: 0; resize: none; background: var(--code-bg); color: var(--ink); tab-size: 2; min-height: 320px; }
+pre { overflow: auto; white-space: pre-wrap; word-break: break-word; background: var(--code-bg); min-height: 200px; }
+pre .err { color: var(--err); }
+pre .note { color: var(--muted); }
+#status { font-size: 13px; color: var(--muted); min-height: 20px; }
+#status.ok { color: var(--ok); }
+#status.err { color: var(--err); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+.busy .dot { background: var(--accent); animation: pulse 1s infinite ease-in-out; }
+@keyframes pulse { 50% { opacity: .3; } }
+.cheat { padding: 0 20px 18px; color: var(--muted); font-size: 13px; }
+.cheat details { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.cheat summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+.cheat table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+.cheat td { padding: 4px 8px 4px 0; vertical-align: top; border-top: 1px solid var(--line); }
+.cheat code { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+footer { padding: 0 20px 20px; color: var(--muted); font-size: 13px; }
+kbd { font: 12px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+@media (max-width: 760px) {
+  header { padding: 12px 16px; gap: 8px; }
+  .brand { width: 100%; }
+  main { grid-template-columns: 1fr; padding: 12px 16px; gap: 12px; }
+  textarea { min-height: 220px; font-size: 14px; }
+  .cheat, footer { padding-left: 16px; padding-right: 16px; }
+  #examples { flex: 1; min-width: 0; }
+  .hide-sm { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><h1>Trawl</h1><span>playground · v@@VERSION@@</span></div>
+  <select id="examples" aria-label="Load an example"></select>
+  <button id="share" title="Copy a link to this program">Copy link</button>
+  <button id="run" class="primary" disabled>Loading…</button>
+</header>
+
+<main>
+  <section class="pane">
+    <div class="pane-head"><b>Program</b><span class="hide-sm"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs it</span></div>
+    <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Trawl program"></textarea>
+  </section>
+  <section class="pane">
+    <div class="pane-head"><b>Output</b><span id="status"><span class="dot"></span>starting the interpreter…</span></div>
+    <pre id="out" aria-live="polite"></pre>
+  </section>
+</main>
+
+<div class="cheat">
+  <details>
+    <summary>Quick reference</summary>
+    <table>
+      <tr><td><code>2 3 + .</code></td><td>numbers go on a stack, words take from it: prints 5. Also <code>- * / % power</code>, <code>= &lt; &gt;</code></td></tr>
+      <tr><td><code>dup drop swap over rot</code></td><td>move numbers around on the stack</td></tr>
+      <tr><td><code>: sq dup * ;</code></td><td>define your own word</td></tr>
+      <tr><td><code>c if A else B then</code></td><td>run A when c is not 0, otherwise B</td></tr>
+      <tr><td><code>[ A ]</code></td><td>loop: run A while the top of the stack is not 0</td></tr>
+      <tr><td><code>1234 10 digsum</code></td><td>digit sum in any base (<code>altsum</code>: units − tens + hundreds …)</td></tr>
+      <tr><td><code>42 7 bury · 7 dig</code></td><td>the seabed: numbered memory cells, all 0 at the start</td></tr>
+      <tr><td><code>lo hi echo</code></td><td>have cells lo..hi looked like this before? gives how many echoes ago, or 0</td></tr>
+      <tr><td><code>1 9 wave · want · more · aim</code></td><td>guess a number, rewind when it's wrong, keep every answer, keep the best</td></tr>
+      <tr><td><code>. emit ." text" .s</code></td><td>print a number, a character, text, the stack</td></tr>
+      <tr><td><code>use stdlib</code></td><td>libraries: <code>stdlib</code>, <code>numbers</code>, <code>orbits</code></td></tr>
+    </table>
+  </details>
+</div>
+
+<footer>
+  This runs Trawl's reference interpreter in your browser, so it checks for stuck loops but is much slower than
+  <code>trawl fast</code>. For long searches, install Trawl and compile to native code.
+  Read the <a href="https://github.com/connabyss/trawl/blob/main/docs/SPEC.md">language spec</a> or the
+  <a href="https://github.com/connabyss/trawl">code on GitHub</a>.
+</footer>
+
+<script>
+const PY = /*@@PY@@*/{};
+const WORK = /*@@WORK@@*/{};
+const EXAMPLES = /*@@EXAMPLES@@*/[];
+const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+
+const workerSrc = `
+importScripts(${JSON.stringify(PYODIDE)} + "pyodide.js");
+let py = null, run = null;
+self.onmessage = async (e) => {
+  const m = e.data;
+  if (m.type === "init") {
+    try {
+      py = await loadPyodide({ indexURL: ${JSON.stringify(PYODIDE)} });
+      for (const [path, text] of Object.entries(m.py)) {
+        const dir = "/home/pyodide/" + path.split("/").slice(0, -1).join("/");
+        py.FS.mkdirTree(dir);
+        py.FS.writeFile("/home/pyodide/" + path, text);
+      }
+      py.FS.mkdirTree("/work");
+      for (const [name, text] of Object.entries(m.work)) py.FS.writeFile("/work/" + name, text);
+      py.globals.set("post_out", (t) => self.postMessage({ type: "out", text: t }));
+      await py.runPythonAsync(\`
+import sys, time
+sys.path.insert(0, "/home/pyodide")
+sys.setrecursionlimit(4000)
+from trawl.lang import parse, TrawlError
+from trawl.interp import run as trawl_run, uses_worlds
+
+LIMIT = 500_000
+
+class Out:
+    def __init__(self):
+        self.buf, self.n, self.total, self.t = [], 0, 0, time.time()
+    def write(self, text):
+        self.total += len(text)
+        if self.total > LIMIT:
+            self.flush()
+            raise TrawlError("the playground stops after 500,000 printed characters. run it with trawl on your own machine for more.")
+        self.buf.append(text); self.n += len(text)
+        if self.n > 4096 or time.time() - self.t > 0.08:
+            self.flush()
+    def flush(self):
+        if self.buf:
+            post_out("".join(self.buf))
+            self.buf, self.n, self.t = [], 0, time.time()
+
+def go(src):
+    out = Out()
+    t0 = time.time()
+    try:
+        prog = parse(src, "/work/program.trawl")
+        worlds = uses_worlds(prog)
+        text, sunk = trawl_run(prog, max_steps=20_000_000, stream=None if worlds else out)
+        if worlds:
+            out.write(text + "\\\\n(%d worlds sank along the way)" % sunk)
+        out.flush()
+        return ["ok", time.time() - t0]
+    except TrawlError as e:
+        out.flush()
+        return ["err", str(e)]
+    except RecursionError:
+        out.flush()
+        return ["err", "the sea got too deep: too many words calling words. trawl on your own machine goes deeper."]
+\`);
+      run = py.globals.get("go");
+      self.postMessage({ type: "ready", version: py.version });
+    } catch (err) {
+      self.postMessage({ type: "fail", msg: String(err) });
+    }
+  } else if (m.type === "run") {
+    const r = run(m.src).toJs();
+    self.postMessage({ type: "done", status: r[0], info: r[1] });
+  }
+};`;
+
+const $ = (id) => document.getElementById(id);
+const code = $("code"), out = $("out"), runBtn = $("run"), status = $("status"), pick = $("examples");
+let worker = null, ready = false, running = false, startedAt = 0, gotOutput = false;
+
+function setStatus(text, cls = "") {
+  status.className = cls;
+  status.innerHTML = '<span class="dot"></span>';
+  status.append(text);
+  document.body.classList.toggle("busy", cls === "busy");
+}
+function appendOut(text, cls) {
+  if (cls) { const s = document.createElement("span"); s.className = cls; s.textContent = text; out.append(s); }
+  else out.append(document.createTextNode(text));
+  out.scrollTop = out.scrollHeight;
+}
+
+function startWorker() {
+  ready = false;
+  worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: "text/javascript" })));
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === "ready") {
+      ready = true; runBtn.disabled = false; runBtn.textContent = "Run";
+      setStatus("ready");
+    } else if (m.type === "fail") {
+      setStatus("couldn't start the interpreter. check your connection and reload.", "err");
+      runBtn.textContent = "Run";
+    } else if (m.type === "out") {
+      gotOutput = true; appendOut(m.text);
+    } else if (m.type === "done") {
+      running = false; runBtn.textContent = "Run"; runBtn.classList.add("primary");
+      if (m.status === "ok") {
+        setStatus(m.info < 1 ? `finished in ${Math.max(1, Math.round(m.info * 1000))} ms` : `finished in ${m.info.toFixed(1)} s`, "ok");
+        if (!gotOutput) appendOut("(nothing printed)", "note");
+      } else {
+        appendOut((gotOutput && !out.textContent.endsWith("\n") ? "\n" : "") + "~ " + m.info, "err");
+        setStatus("stopped with an error", "err");
+      }
+    }
+  };
+  worker.onerror = (e) => {
+    e.preventDefault();
+    setStatus("couldn't load the interpreter. check your connection and reload.", "err");
+    runBtn.textContent = "Run";
+  };
+  worker.postMessage({ type: "init", py: PY, work: WORK });
+}
+
+function runProgram() {
+  if (!ready) return;
+  if (running) { // stop: the only safe way to interrupt Python is a fresh worker
+    worker.terminate(); running = false;
+    appendOut((out.textContent && !out.textContent.endsWith("\n") ? "\n" : "") + "~ stopped by you", "err");
+    runBtn.disabled = true; runBtn.textContent = "Loading…";
+    setStatus("restarting the interpreter…", "busy");
+    startWorker();
+    return;
+  }
+  out.textContent = ""; gotOutput = false; running = true; startedAt = performance.now();
+  runBtn.textContent = "Stop";
+  setStatus("running…", "busy");
+  worker.postMessage({ type: "run", src: code.value });
+}
+
+// examples and sharing
+for (const ex of EXAMPLES) {
+  const o = document.createElement("option"); o.value = ex.id; o.textContent = ex.title; pick.append(o);
+}
+pick.addEventListener("change", () => {
+  const ex = EXAMPLES.find((x) => x.id === pick.value);
+  code.value = ex.src; out.textContent = "";
+  history.replaceState(null, "", "#" + ex.id);
+  if (ready && !running) setStatus("ready");
+});
+function encode(s) { return btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function decode(s) { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/")); return new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))); }
+$("share").addEventListener("click", async () => {
+  const url = location.href.split("#")[0] + "#code=" + encode(code.value);
+  history.replaceState(null, "", url);
+  try { await navigator.clipboard.writeText(url); $("share").textContent = "Copied"; }
+  catch { $("share").textContent = "Link in address bar"; }
+  setTimeout(() => ($("share").textContent = "Copy link"), 1800);
+});
+function loadFromHash() {
+  const h = location.hash.slice(1);
+  if (h.startsWith("code=")) { try { code.value = decode(h.slice(5)); return; } catch {} }
+  const ex = EXAMPLES.find((x) => x.id === h) || EXAMPLES[0];
+  pick.value = ex.id; code.value = ex.src;
+}
+
+// editor comforts
+code.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); runProgram(); }
+  else if (e.key === "Tab" && !e.shiftKey) {
+    e.preventDefault();
+    const { selectionStart: a, selectionEnd: b } = code;
+    code.setRangeText("  ", a, b, "end");
+  }
+});
+runBtn.addEventListener("click", runProgram);
+
+loadFromHash();
+setStatus("starting the interpreter…", "busy");
+startWorker();
+</script>
+</body>
+</html>

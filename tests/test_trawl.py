@@ -305,3 +305,26 @@ def test_a343507_reproduces_the_published_terms(native):
     path = ROOT / "examples" / "a343507.trawl"
     src = path.read_text(encoding="utf-8") + "\n2 0 1000 search . 3 0 10000 search . 4 0 10000 search . 5 0 1000000 search . 6 0 10000000 search ."
     assert native(src, str(path)) == "208 3475 8174 252965 3648835 \n"
+
+
+ERDOS = ROOT / "examples" / "erdos727"
+
+
+@needs_cc
+def test_erdos727_families_match_an_independent_check(native):
+    # counts checked separately in Python with Legendre's formula
+    k4 = (ERDOS / "quartic_k4.trawl")
+    assert native("use quartic_k4\n2 300 hunt", str(k4)) == "69 126 168 188 199 count 5 \n"
+    k3 = (ERDOS / "land_k3.trawl")
+    assert native("use land_k3\n0 2000 hunt", str(k3)) == "count 288 \n"
+
+
+def test_erdos727_k4_family_on_the_interpreter():
+    k4 = ERDOS / "quartic_k4.trawl"
+    assert interp("use quartic_k4\n60 80 hunt", str(k4)) == "69 count 1 \n"
+
+
+def test_playground_page_is_up_to_date():
+    # playground/index.html embeds the interpreter; rebuild it when the interpreter changes
+    r = subprocess.run([sys.executable, str(ROOT / "playground" / "build.py"), "--check"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr

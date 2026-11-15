@@ -1,0 +1,41 @@
+# shared words for Erdos 727 polynomial families.
+# The factors of (n+1)...(n+k) sit in cells 5001..5000+F (F at -3). judge ( n -- flag ) says
+# whether ((n+k)!)^2 | (2n)!: for every prime p, 2 * (power of p in the product) <= carries of n+n in base p.
+# -3 F  -5 trial bound  -19 n  -37 verdict  -38 p  -17 i
+
+: carries -45 bury -46 bury 0 -47 bury 0 -48 bury
+  -46 dig -48 dig + 0 > [ drop
+    -46 dig -45 dig % 2 * -48 dig + -45 dig < 0 = -48 bury
+    -47 dig -48 dig + -47 bury
+    -46 dig -45 dig / -46 bury
+    -46 dig -48 dig + 0 > ] drop
+  -47 dig ;
+
+# strip ( p -- v ): divide p out of every factor cell, counting how many times
+: strip -31 bury 0 -32 bury 1 -17 bury
+  1 [ drop
+    -17 dig 5000 + dig -33 bury
+    -33 dig -31 dig % 0 = [ drop
+      -33 dig -31 dig / -33 bury -32 dig 1 + -32 bury
+      -33 dig -31 dig % 0 = ] drop
+    -33 dig -17 dig 5000 + bury
+    -17 dig 1 + -17 bury
+    -17 dig -3 dig > 0 = ] drop
+  -32 dig ;
+
+# test ( p -- ): strip p and mark the verdict 0 if p has too few carries
+: test dup -38 bury strip 2 * -19 dig -38 dig carries > if 0 -37 bury then ;
+
+: judge -19 bury 1 -37 bury
+  2 -38 bury
+  1 [ drop
+    -38 dig -36 bury -38 dig test -36 dig 1 + -38 bury
+    -38 dig -5 dig > 0 =  -37 dig * ] drop
+  # what is left in each cell is 1 or a prime above the trial bound
+  1 -39 bury
+  1 [ drop
+    -39 dig 5000 + dig -40 bury
+    -40 dig 1 > if -40 dig test then
+    -39 dig 1 + -39 bury
+    -39 dig -3 dig > 0 =  -37 dig * ] drop
+  -37 dig ;
