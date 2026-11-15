@@ -30,33 +30,33 @@ EXAMPLES = [
     ("collatz", "Collatz records",
      "Halve even numbers, turn odd n into 3n + 1, and count the steps down to 1. This hunt catches every "
      "starting number that takes longer than all the smaller ones. Nobody has proved every number reaches 1.",
-     "change 10000 to 30000 for more records."),
+     "drag the slider to test more numbers. Bigger hunts take longer."),
     ("hello", "A first look",
      "Numbers go on a stack and words use them up: 12 sq means 12 times 12. Numbers never overflow, and "
      "digits work in any base.",
-     "change 100 to 1000 and see how big 2 to the 1000 is."),
+     "push the power up to 1000 and see how big the number gets."),
     ("rivers", "Digit rivers",
      "Start at 1. Each stop adds the square of its digit sum: 1, 2, 6, 42, 78... Where does the river go?",
-     "start somewhere else by changing the first 1."),
+     "start the river somewhere else and see if it joins the same path."),
     ("zerofree", "Powers of 2 with no zero",
      "Which powers of 2 have no digit 0? The last known one is 2^86. This hunt checks every power up to 2^300.",
-     "check further by changing 300 to 1000 (it takes longer)."),
+     "check further. Does another one ever show up?"),
     ("reef", "Echo: when does it repeat?",
      "A ring of 13 reef spots grows by a simple rule each year. The word echo notices when the whole reef "
      "looks exactly like it did before, which tells you how long its cycle is.",
-     "change n 13 to another size. Open the full printout below to see the reef."),
+     "try another reef size. Open the full printout below to see the reef."),
     ("queens", "Worlds: six queens",
      "Place six queens on a 6 by 6 board so none attack each other. wave guesses a row, and want throws away "
      "every world where a queen is attacked. The board is in the full printout below.",
-     "change n 6 to 8."),
+     "try a bigger board. The board is in the full printout below."),
     ("pearls", "Pearls: remembered answers",
      "slow-fib asks itself the same question millions of times. A pearled word remembers each answer, so "
      "Fibonacci number 90 comes back instantly.",
-     "ask for 200 kind-fib."),
+     "ask for a much bigger Fibonacci number."),
     ("orbit", "Whirlpools: x squared mod 31",
      "Keep squaring and taking the remainder mod 31. Every start falls into a loop. orbit tells you how long "
      "the lead-in and the loop are.",
-     "change 31 to another number, like 101."),
+     "try dividing by another number, like 101."),
     ("stuck", "A loop that is proven stuck",
      "This loop never changes anything. Instead of hanging forever, Trawl sees the exact same state come back "
      "and stops with a proof that it can never end.",
@@ -64,14 +64,35 @@ EXAMPLES = [
     ("a343507", "OEIS A343507 by brute force",
      "For each n, the least k where ((k+n)!)^2 divides (2k)!. This is the sequence behind Erdős problem 727. "
      "The playground finds a(2) by checking every k. The fast search that found new terms is in examples/.",
-     "try 3 a . instead of 2 a . (it takes a while here)."),
+     "set n to 3 (it takes a while here)."),
     ("k4", "Erdős 727: a k = 4 family",
      "Erdős problem 727 is open. This tests one family of numbers, n = 8t^4 - 18t^2 + 6, and catches each t "
      "that works for k = 4. It is a lead, not a proof.",
-     "change 131 to 300 to search further."),
+     "search further and see how many more t work."),
 ]
+# knobs: big numbers to change without touching the code. (label, the code around the number with
+# "#" in its place, lowest, highest, step)
+KNOBS = {
+    "collatz": [("Test every number up to", "dup # <", 1000, 100000, 1000)],
+    "hello": [("2 to the power", "# dup 2 swap power", 1, 3000, 1)],
+    "rivers": [("Start the river at", "# 1 1 [", 1, 500, 1), ("How many stops", "dup # <", 2, 300, 1)],
+    "zerofree": [("Check powers of 2 up to", "dup # <", 10, 3000, 10)],
+    "reef": [("Reef size", ": n # ;", 3, 40, 1)],
+    "queens": [("Board size", ": n # ;", 4, 8, 1)],
+    "pearls": [("Which Fibonacci number", "# kind-fib .", 1, 300, 1)],
+    "orbit": [("Remainder after dividing by", "* # %", 2, 500, 1), ("Starts up to", "dup # <", 3, 200, 1)],
+    "a343507": [("n", "# a .", 1, 3, 1)],
+    "k4": [("Check t up to", "dup # <", 70, 600, 10)],
+}
+for i, *_ in EXAMPLES:
+    for label, pat, lo, hi, step in KNOBS.get(i, []):
+        assert pat.replace("#", "") and pat.count("#") == 1, pat
 EXAMPLES = [(i, t, (HERE / "examples" / f"{i}.trawl").read_text(encoding="utf-8"), a, y) for i, t, a, y in EXAMPLES]
 
+for i, t_, s_, a_, y_ in EXAMPLES:
+    for label, pat, lo, hi, step in KNOBS.get(i, []):
+        if not re.search(re.escape(pat).replace("\\#", r"(-?\d+)"), s_):
+            sys.exit(f"knob {label!r}: {pat!r} is not in examples/{i}.trawl")
 page = (HERE / "template.html").read_text(encoding="utf-8")
 def js(value):
     # JSON is valid JavaScript; "</" is escaped so no text can close the <script> early
@@ -80,7 +101,7 @@ def js(value):
 
 page = page.replace("/*@@PY@@*/{}", js(PY))
 page = page.replace("/*@@WORK@@*/{}", js(WORK))
-page = page.replace("/*@@EXAMPLES@@*/[]", js([{"id": i, "title": t, "src": s, "about": a, "try": y} for i, t, s, a, y in EXAMPLES]))
+page = page.replace("/*@@EXAMPLES@@*/[]", js([{"id": i, "title": t, "src": s, "about": a, "try": y, "knobs": KNOBS.get(i, [])} for i, t, s, a, y in EXAMPLES]))
 page = page.replace("@@VERSION@@", re.search(r'__version__ = "([^"]+)"', PY["trawl/__init__.py"]).group(1))
 target = HERE / "index.html"
 if "--check" in sys.argv:  # used by the tests: is index.html up to date?

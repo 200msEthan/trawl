@@ -6,4 +6,4 @@
   dup steps dup -1 dig > if
     dup -1 bury over . ." takes " . ." steps to fall to 1, a new record" 10 emit
   else drop then
-  1 + dup 10000 < ] drop drop
+  1 + dup 20000 < ] drop drop
