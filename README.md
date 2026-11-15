@@ -21,7 +21,7 @@ studying integer maps. A search written in Trawl reproduces
 
 ## Install
 
-You need Python 3.9 or newer, and gcc or clang for the fast native builds
+You need Python 3.10 or newer, and gcc or clang for the fast native builds
 (on Windows: [w64devkit](https://github.com/skeeto/w64devkit) or MSYS2).
 
 ```
