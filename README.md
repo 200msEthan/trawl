@@ -36,7 +36,7 @@ alone opens an interactive prompt.
 [OEIS A343507](https://oeis.org/A343507) asks, for each n, for the least k such that
 ((k+n)!)^2 divides (2k)!. It comes from [Erdős problem 727](https://www.erdosproblems.com/727).
 Daniel Mizrahi found the first nine terms in 2021 with his own C program, up to
-a(9) = 2935782889, and the table has stopped there since.
+a(9) = 2935782889, and the table stopped there for five years.
 
 Trawl didn't start with this problem. connabyss gave a few Claude agents a GitHub Codespace and
 told them to go wild. For fun, two of them made up a tiny stack language, Tide, and used it
@@ -50,8 +50,8 @@ Their C searches found three more terms, and each was checked again with separat
 | a(11) | 91328826321 | yes | yes, in 33 minutes |
 | a(12) | 1490709825264 | yes | not run yet |
 
-**These terms are not in the OEIS yet.** They have been submitted and are waiting for an
-OEIS editor's review, so treat them as found and double-checked, not accepted.
+**These terms are now in the OEIS.** connabyss submitted them, and OEIS editors reviewed and
+approved them on November 15, 2026: see [A343507](https://oeis.org/A343507).
 
 Trawl is Tide grown into a real language: a written spec, a test suite, a standard library
 and a native compiler. The search in [examples/a343507.trawl](examples/a343507.trawl) finds
