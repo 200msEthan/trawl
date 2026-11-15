@@ -124,8 +124,9 @@ def find_lib(name, search):
     return None
 
 
-def expand(toks, search, depth=0):
-    """Replace every `use name` with the tokens of name.trawl (or name.tide)."""
+def expand(toks, search, depth=0, used=None):
+    """Replace every `use name` with the tokens of name.trawl (or name.tide).
+    `used`, if given, collects the path of every library file read."""
     out, i = [], 0
     while i < len(toks):
         t = toks[i]
@@ -139,7 +140,9 @@ def expand(toks, search, depth=0):
             if depth > 50:
                 raise TrawlError(f"{where(t)}: libraries keep using each other in a circle")
             here = [os.path.dirname(os.path.abspath(path))] + search
-            out += expand(tokens(open(path, encoding="utf-8").read(), path), here, depth + 1)
+            if used is not None and path not in used:
+                used.append(path)
+            out += expand(tokens(open(path, encoding="utf-8").read(), path), here, depth + 1, used)
             i += 2
         else:
             out.append(t)
@@ -214,13 +217,14 @@ class Parser:
         return d
 
 
-def parse(src, file="<program>", search=None):
-    """Source text -> Program. `search` lists folders for `use`; the program's folder and lib/ are added."""
+def parse(src, file="<program>", search=None, used=None):
+    """Source text -> Program. `search` lists folders for `use`; the program's folder and lib/ are added.
+    `used`, if given, collects the path of every library file read."""
     dirs = list(search or [])
     if file and file != "<program>":
         dirs.insert(0, os.path.dirname(os.path.abspath(file)))
     dirs.append(LIB_DIR)
-    p = Parser(expand(tokens(src, file), dirs))
+    p = Parser(expand(tokens(src, file), dirs, used=used))
     body, _ = p.block([])
     return Program(body, p.defs)
 
