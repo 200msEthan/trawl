@@ -37,9 +37,28 @@ button.primary.stop { background: var(--warm); border-color: var(--warm); }
 button:disabled { opacity: .6; cursor: default; }
 :focus-visible { outline: 2px solid var(--sonar); outline-offset: 2px; }
 
-.hero { padding: 10px 0 14px; max-width: 860px; }
-.hero p.lead { font-size: 19px; line-height: 1.45; margin: 0; color: var(--ink); }
-.hero p.lead b { color: var(--sonar); font-weight: 650; }
+.tag { margin: 4px 0 16px; font-size: 17px; color: var(--muted); }
+.tag em { font-style: normal; color: var(--ink); }
+.callout { display: flex; align-items: flex-start; gap: 12px; margin: 12px 12px 0; padding: 12px 14px; border-radius: 10px; background: rgba(127, 220, 208, .09); border: 1px solid var(--edge-strong); }
+.callout p { margin: 0; flex: 1; font-size: 16px; line-height: 1.4; color: var(--ink); transition: opacity .35s ease; }
+.callout p.out { opacity: 0; }
+.callout p b { color: var(--sonar); font-weight: 600; }
+.callout button { min-height: 30px; padding: 3px 10px; font-size: 12px; color: var(--muted); }
+.callout button[hidden] { display: none; }
+.knobs { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 0; }
+.knobs:empty { display: none; }
+.knob { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; }
+.knob[hidden] { display: none; }
+.now { margin-left: auto; font: 13px var(--mono); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.knob label { font-size: 14px; color: var(--muted); }
+.knob .val { display: flex; align-items: center; gap: 6px; }
+.knob .val button { width: 36px; min-height: 36px; padding: 0; font-size: 18px; line-height: 1; }
+.knob .val output { min-width: 5.5ch; text-align: center; font: 500 22px/1 var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; transition: color .3s ease; }
+.knob input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--sonar); height: 26px; margin: 0; }
+.knob.pulse output { color: var(--sonar); }
+.catch.find { border-left-color: var(--warm); background: rgba(233, 194, 122, .08); }
+.catch.find .num { color: var(--warm); }
+.catch.find .say b { display: block; color: var(--warm); font-weight: 600; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 2px; }
 .about { margin-top: 14px; padding: 14px 16px; border-left: 3px solid var(--sonar); background: var(--glass); border-radius: 0 12px 12px 0; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .about[hidden] { display: none; }
 .about h2 { margin: 0 0 4px; font-size: 15px; color: var(--sonar); letter-spacing: .02em; }
@@ -53,8 +72,14 @@ button:disabled { opacity: .6; cursor: default; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--edge); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .panel-head b { color: var(--ink); font-weight: 650; }
 .code-panel { transition: transform .9s cubic-bezier(.2, .8, .2, 1), opacity .9s ease; }
-body.diving .code-panel { transform: translateY(48px); opacity: 0; pointer-events: none; }
-textarea { display: block; width: 100%; min-height: 380px; resize: vertical; border: 0; margin: 0; padding: 14px 16px; background: transparent; color: var(--ink); font: 14px/1.65 var(--mono); tab-size: 2; }
+body.diving .code-panel { opacity: .92; }
+textarea { position: relative; display: block; width: 100%; min-height: 380px; resize: vertical; border: 0; margin: 0; padding: 14px 16px; background: transparent; color: var(--ink); font: 14px/1.65 var(--mono); tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; }
+.editor { position: relative; }
+.hl { position: absolute; inset: 0; margin: 0; padding: 14px 16px; overflow: hidden; pointer-events: none; color: transparent; font: 14px/1.65 var(--mono); tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; }
+.hl mark { color: transparent; background: rgba(127, 220, 208, .2); border-radius: 4px; box-shadow: 0 0 0 2px rgba(127, 220, 208, .35); }
+.hl mark.flash { animation: flash 1.2s ease 2; }
+@keyframes flash { 50% { background: rgba(127, 220, 208, .55); box-shadow: 0 0 0 3px rgba(127, 220, 208, .6), 0 0 18px rgba(127, 220, 208, .5); } }
+.about p.try b { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 .keys { text-transform: none; letter-spacing: 0; color: var(--faint); }
 kbd { font: 11px var(--mono); border: 1px solid var(--edge-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); }
 
@@ -81,6 +106,7 @@ details.log summary { cursor: pointer; padding: 9px 14px; font-size: 12px; lette
 #out .err { color: var(--err); }
 .alert { margin: 0 12px 12px; padding: 10px 14px; border-radius: 10px; background: rgba(255, 154, 133, .1); border: 1px solid rgba(255, 154, 133, .35); color: var(--err); font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .alert[hidden] { display: none; }
+.jump { display: none; padding: 10px 14px 12px; font-size: 14px; border-top: 1px solid var(--edge); text-decoration: none; }
 
 .cheat { margin-top: 16px; }
 .cheat details { background: var(--glass); border: 1px solid var(--edge); border-radius: 14px; padding: 10px 16px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
@@ -92,22 +118,39 @@ footer { margin-top: 16px; color: var(--faint); font-size: 13px; }
 footer code { font-family: var(--mono); color: var(--muted); }
 
 @media (max-width: 820px) {
-  .wrap { padding: 0 14px 24px; }
-  header { gap: 8px; }
-  .brand { width: 100%; }
-  #examples { flex: 1 1 100%; min-width: 0; }
-  header button { flex: 1 1 0; padding-left: 8px; padding-right: 8px; }
-  .hero p.lead { font-size: 17px; }
-  .deck { grid-template-columns: 1fr; }
+  /* phones: the first screen holds the explainer, the slider and the catches */
+  .wrap { padding: 0 12px 24px; }
+  header { gap: 8px; padding: 10px 0 8px; }
+  .brand { margin-right: auto; }
+  .brand h1 { font-size: 19px; }
+  .brand span { display: none; }
+  header button { min-height: 36px; padding: 5px 10px; font-size: 13px; }
+  #examples { order: 10; flex: 1 1 100%; min-width: 0; min-height: 38px; }
+  .tag { display: none; }
+  .deck { grid-template-columns: 1fr; gap: 12px; }
+  .deck > .about { order: -2; padding: 10px 12px; }
+  .about h2 { font-size: 14px; margin: 0 0 2px; }
+  .about p { font-size: 14px; line-height: 1.4; }
+  .about #about-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+  .about.open #about-text { display: block; }
+  .about p.try { font-size: 13px; margin-top: 4px; }
   .sonar { order: -1; min-height: 0; }
   .code-panel { order: 1; }
-  .hero { padding-bottom: 10px; }
-  .hero p.lead { font-size: 16px; }
-  #catches { max-height: 320px; }
-  .catch .num { font-size: 21px; }
-  .catch .num.long { font-size: 15px; }
+  .panel-head { padding: 7px 12px; }
+  .callout { margin: 10px 10px 0; padding: 10px 12px; }
+  .callout p { font-size: 14px; }
+  .knobs { padding: 8px 12px 0; gap: 6px; }
+  .knob .val output { font-size: 20px; }
+  .counter { padding: 6px 12px 0; }
+  .counter strong { font-size: 24px; }
+  #catches { max-height: 240px; padding: 6px 10px 10px; gap: 6px; }
+  .catch { padding: 8px 12px; }
+  .catch .num { font-size: 19px; }
+  .catch .num.long { font-size: 14px; }
+  .catch .say { font-size: 13px; }
   textarea { min-height: 260px; }
   .hide-sm { display: none; }
+  .jump { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .code-panel, .catch { transition: none; animation: none; }
@@ -121,27 +164,28 @@ footer code { font-family: var(--mono); color: var(--muted); }
   <header>
     <div class="brand"><h1>Trawl</h1><span>playground · v@@VERSION@@</span></div>
     <select id="examples" aria-label="Pick a hunt"></select>
-    <button id="sound" aria-pressed="false" title="Sound on or off">Tap for sound</button>
+    <button id="sound" aria-pressed="false" title="Sound on or off">Sound</button>
     <button id="share" title="Copy a link to this program">Copy link</button>
     <button id="run" class="primary" disabled>Diving…</button>
   </header>
 
-  <section class="hero">
-    <p class="lead"><b>Trawl is a tiny language for hunting patterns in whole numbers.</b> Pick a hunt, press Run, and watch what it catches. Then change a number and run it again. Nothing to install.</p>
-  </section>
+  <p class="tag">Trawl hunts for numbers that fit a rule. <em>Change a number and watch.</em></p>
 
   <main class="deck">
     <div class="about" id="about"><h2 id="about-title"></h2><p id="about-text"></p><p class="try" id="about-try"></p></div>
-    <section class="panel code-panel" aria-label="Program">
+    <section class="panel code-panel" id="code-panel" aria-label="Program">
       <div class="panel-head"><b>The program</b><span class="keys hide-sm"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> runs it</span></div>
-      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Trawl program"></textarea>
+      <div class="editor"><pre class="hl" id="hl" aria-hidden="true"></pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Trawl program"></textarea></div>
     </section>
     <section class="panel sonar" aria-label="Catches">
-      <div class="panel-head"><b>Sonar</b><span id="status"><span class="dot"></span><span id="status-text">diving: loading the interpreter…</span></span></div>
-      <div class="counter"><strong id="count">0</strong><span id="count-label">catches</span></div>
+      <div class="panel-head"><b>Catches</b><span id="status"><span class="dot"></span><span id="status-text">diving: loading the interpreter…</span></span></div>
+      <div class="callout" id="callout" aria-live="polite"><p id="caption">Loading the hunter…</p><button id="skip">Skip</button></div>
+      <div class="knobs" id="knobs"></div>
+      <div class="counter"><strong id="count">0</strong><span id="count-label">catches</span><span id="now" class="now"></span></div>
       <ol id="catches" aria-live="polite" data-empty="Every line the program prints that starts with a number shows up here as a catch."></ol>
       <div class="alert" id="alert" role="alert" hidden></div>
       <details class="log" open><summary>Everything it printed</summary><pre id="out"></pre></details>
+      <a class="jump" href="#code-panel">See the code ↓</a>
     </section>
   </main>
 
@@ -220,6 +264,12 @@ class Out:
             post_out("".join(self.buf))
             self.buf, self.n, self.t = [], 0, time.time()
 
+def brief(v):
+    # writing out a huge number is slow, so only small ones are shown in full
+    if -10**24 < v < 10**24:
+        return str(v)
+    return "%s-digit number" % format(int(abs(v).bit_length() * 0.30103) + 1, ",")
+
 class SonarSea(Sea):
     # every few thousand steps, send up the numbers on top of the stack:
     # these are the numbers that stream past behind the page while it hunts
@@ -230,7 +280,7 @@ class SonarSea(Sea):
             now = time.time()
             if now - self.last > 0.06:
                 self.last = now
-                post_sonar(" ".join(str(v) for v in self.stack[-3:]))
+                post_sonar("|".join([str(self.steps)] + [brief(v) for v in self.stack[:1] + self.stack[-1:]]))
         return Sea.exec(self, body)
 
 def go(src):
@@ -239,10 +289,10 @@ def go(src):
     try:
         prog = parse(src, "/work/program.trawl")
         if uses_worlds(prog):
-            text, sunk = trawl_run(prog, max_steps=20_000_000)
+            text, sunk = trawl_run(prog, max_steps=10**15)
             out.write(text + "\\\\n(%d worlds sank along the way)" % sunk)
         else:
-            SonarSea(max_steps=20_000_000, stream=out).run(prog)
+            SonarSea(max_steps=10**15, stream=out).run(prog)
         out.flush()
         return ["ok", time.time() - t0]
     except TrawlError as e:
@@ -371,7 +421,7 @@ function pingSound() {
 }
 const soundBtn = document.getElementById("sound");
 function updateSoundButton() {
-  soundBtn.textContent = !soundOn ? "Sound off" : audio ? "Sound on" : "Tap for sound";
+  soundBtn.textContent = !soundOn ? "Sound off" : audio ? "Sound on" : "Sound";
   soundBtn.setAttribute("aria-pressed", String(soundOn && !!audio));
 }
 soundBtn.addEventListener("click", () => {
@@ -405,15 +455,16 @@ function lockOn(el, value) { // the number scrambles, then locks on digit by dig
     if (k < 1) requestAnimationFrame(step);
   })(start);
 }
-function addCatch(line) {
+function addCatch(line, label) {
   const m = line.match(/^\s*(?:[A-Za-z]\w{0,3} = )?(-?\d+)/);
-  if (!m) return;
+  if (!m) return false;
   const n = m[1];
-  setCount(count + 1);
-  const li = document.createElement("li"); li.className = "catch fresh";
+  if (!label) setCount(count + 1);
+  const li = document.createElement("li"); li.className = "catch fresh" + (label ? " find" : "");
   const num = document.createElement("span"); num.className = "num" + (n.length > 12 ? " long" : "");
   num.title = n;
   const say = document.createElement("span"); say.className = "say"; say.textContent = line.trim();
+  if (label) { const b = document.createElement("b"); b.textContent = label; say.prepend(b); }
   li.append(num, say);
   list.prepend(li);
   list.scrollTop = 0;
@@ -427,6 +478,8 @@ function addCatch(line) {
   });
   pingSound();
   streamNumber(n, true);
+  if (intro.on) introCatch();
+  return true;
 }
 function takeOutput(text) {
   out.append(document.createTextNode(text));
@@ -441,32 +494,94 @@ function finishLine() { if (lineBuf) { catchQueue.push(lineBuf); lineBuf = ""; }
 const catchQueue = [];
 setInterval(() => {
   const n = catchQueue.length > 30 ? 4 : catchQueue.length > 10 ? 2 : 1;
-  for (let i = 0; i < n && catchQueue.length; i++) addCatch(catchQueue.shift());
+  for (let i = 0; i < n && catchQueue.length; ) if (addCatch(catchQueue.shift())) i++; // lines without a catch don't wait their turn
 }, 150);
 
 /* ---------------------------------------------------------------- running */
 let worker = null, ready = false, running = false, firstRun = true;
+
+/* ---------------------------------------------------------------- the guided intro
+   Short captions right above the catches, where the eye already is. */
+const intro = { on: true, queue: [], busy: false, caught: false };
+function caption(html) {
+  const c = $("caption");
+  c.classList.add("out");
+  setTimeout(() => { c.innerHTML = html; c.classList.remove("out"); }, REDUCED ? 0 : 350);
+}
+function say(text, hold = 4500) {
+  if (!intro.on) return;
+  intro.queue.push([text, hold]);
+  if (!intro.busy) nextCaption();
+}
+function nextCaption() {
+  const item = intro.queue.shift();
+  if (!item || !intro.on) { intro.busy = false; return; }
+  intro.busy = true;
+  const [text, hold] = item;
+  if (typeof text === "function") text(); else caption(text);
+  setTimeout(nextCaption, REDUCED ? Math.min(hold, 1500) : hold);
+}
+function climax() {
+  [["19295451536", "10th"], ["91328826321", "11th"], ["1490709825264", "12th"]].forEach(([n, nth], i) =>
+    setTimeout(() => addCatch(`${n} is the ${nth} number in a list from an unsolved Erdős puzzle (OEIS A343507)`, "New to the world"), 300 + i * 1500));
+}
+function endIntro() {
+  if (!intro.on) return;
+  intro.on = false; intro.queue.length = 0;
+  $("skip").hidden = true;
+  caption("<b>Your turn.</b> Change a number and watch what it catches.");
+  intro.justEnded = true;
+  reveal();
+}
+$("skip").addEventListener("click", () => endIntro());
+function introLoading() {
+  say("A famous puzzle: <b>halve even numbers, triple odd ones and add 1.</b> Does every number end up at 1?", 5200);
+}
+function introStart() {
+  say("Nobody has proved it. <b>Trawl is testing every number up to 20,000</b> right now.", 4800);
+}
+function introCatch() {
+  if (intro.caught) return; intro.caught = true;
+  say("<b>Each ping is a record:</b> a number that takes longer to reach 1 than any number before it.", 5200);
+  say("<b>Drag the slider</b> to test more numbers. The hunt starts over.", 4800);
+}
+function introDone() {
+  say(() => { caption("This kind of hunt also found <b>three numbers no one had ever published</b>, for an unsolved puzzle by the mathematician Paul Erdős."); climax(); }, 7000);
+  say("Found by Claude agents in November 2026 and double-checked. That search takes hours, so it isn't run here.", 5500);
+  say(() => endIntro(), 100);
+}
 function setStatus(text, cls = "") { $("status").className = cls; $("status-text").textContent = text; }
 function reveal() { document.body.classList.remove("diving"); }
 function startWorker() {
   ready = false;
   worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: "text/javascript" })));
-  worker.onerror = (e) => { e.preventDefault(); setStatus("couldn't load the interpreter. check your connection and reload.", "err"); runBtn.textContent = "Run"; reveal(); };
+  worker.onerror = (e) => { e.preventDefault(); setStatus("couldn't load the interpreter. check your connection and reload.", "err"); runBtn.textContent = "Run"; endIntro(true); };
   worker.onmessage = (e) => {
     const m = e.data;
     if (m.type === "ready") {
       ready = true; runBtn.disabled = false; runBtn.textContent = "Run";
       setStatus("ready");
-      if (firstRun) { firstRun = false; runProgram(); setTimeout(reveal, REDUCED ? 0 : 2600); }
+      if (pendingRun) { pendingRun = false; runProgram(); return; }
+      if (firstRun) { firstRun = false; runProgram(); if (intro.on) introStart(); else reveal(); }
     } else if (m.type === "fail") {
       setStatus("couldn't start the interpreter. check your connection and reload.", "err"); reveal();
     } else if (m.type === "out") {
       takeOutput(m.text);
     } else if (m.type === "sonar") {
-      for (const n of m.text.split(" ")) streamNumber(n, false);
+      const [steps, ...parts] = m.text.split("|");
+      for (const n of parts) if (!n.includes("digit")) streamNumber(n, false);
+      // show where the hunt is; if that number isn't moving, show the work instead, so it never looks stuck
+      const at = parts[0] || "", t = performance.now();
+      if (at !== nowAt.value) { nowAt.value = at; nowAt.since = t; }
+      const fmt = (x) => x.includes("digit") ? "a " + x : Number(x).toLocaleString("en-US");
+      $("now").textContent = at && t - nowAt.since < 1500 ? "now at " + fmt(at)
+        : (Number(steps) / 1e6).toFixed(1) + " million steps so far";
     } else if (m.type === "done") {
       running = false; runBtn.textContent = "Run"; runBtn.classList.remove("stop");
+      $("now").textContent = "";
       finishLine();
+      if (intro.on) setTimeout(introDone, 1200);
+      else if ($("caption").textContent.startsWith("Still hunting")) $("callout").hidden = true;
       if (m.status === "ok") {
         setStatus(`done in ${m.info < 1 ? Math.max(1, Math.round(m.info * 1000)) + " ms" : m.info.toFixed(1) + " s"}`, "ok");
         if (!out.textContent) out.textContent = "(nothing printed)";
@@ -495,10 +610,19 @@ function runProgram() {
     startWorker();
     return;
   }
-  out.textContent = ""; list.textContent = ""; lineBuf = ""; catchQueue.length = 0; alertBox.hidden = true; setCount(0);
+  if (!intro.on && !intro.justEnded) $("callout").hidden = true; // the tour is over: give the space to the catches
+  intro.justEnded = false;
+  out.textContent = ""; list.textContent = ""; lineBuf = ""; catchQueue.length = 0; $("now").textContent = ""; alertBox.hidden = true; setCount(0);
   running = true; runBtn.textContent = "Stop"; runBtn.classList.add("stop");
   setStatus("hunting…", "busy");
   worker.postMessage({ type: "run", src: code.value });
+  const myRun = ++runId;
+  setTimeout(() => {
+    if (running && runId === myRun && !intro.on) {
+      $("callout").hidden = false; $("skip").hidden = true;
+      caption("<b>Still hunting.</b> Bigger numbers take longer here, and some hunts find nothing for a long time. Watch \"now at\" climb, or press Stop any time.");
+    }
+  }, 12000);
 }
 
 /* ---------------------------------------------------------------- examples, sharing, editor */
@@ -509,9 +633,80 @@ function showAbout(ex) {
   $("about-title").textContent = ex.title;
   $("about-text").textContent = ex.about;
   $("about-try").textContent = "";
-  if (ex.try) { const b = document.createElement("b"); b.textContent = "Try: "; $("about-try").append(b, ex.try); }
+  if (ex.try) {
+    const b = document.createElement("b"); b.textContent = "Try: "; b.title = "Show me the number";
+    b.addEventListener("click", () => flashKnobs(true));
+    $("about-try").append(b, ex.try);
+  }
 }
-function loadExample(ex) { pick.value = ex.id; code.value = ex.src; showAbout(ex); }
+/* knobs: the numbers worth changing, as big controls. Changing one rewrites the program and hunts again. */
+let knobs = [], knobTimer = 0;
+function knobRegex(pat) { return new RegExp(pat.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace("#", "(-?\\d+)")); }
+function renderKnobs(ex) {
+  const box = $("knobs"); box.textContent = ""; knobs = [];
+  for (const [label, pat, lo, hi, step] of (ex && ex.knobs) || []) {
+    const re = knobRegex(pat), m = code.value.match(re);
+    if (!m) continue;
+    const row = document.createElement("div"); row.className = "knob";
+    const id = "knob" + knobs.length;
+    row.innerHTML = `<label for="${id}"></label><span class="val"><button aria-label="less">−</button><output></output><button aria-label="more">+</button></span><input type="range" id="${id}">`;
+    row.querySelector("label").textContent = label;
+    const range = row.querySelector("input"), outEl = row.querySelector("output"), [less, more] = row.querySelectorAll("button");
+    Object.assign(range, { min: lo, max: hi, step, value: m[1] });
+    const k = { re, pat, range, outEl, row, lo, hi, step };
+    const set = (v, now) => {
+      v = Math.max(lo, Math.min(hi, Math.round(v / step) * step || lo));
+      range.value = v; outEl.textContent = Number(v).toLocaleString("en-US");
+      code.value = code.value.replace(re, () => pat.replace("#", String(v)));
+      flashKnobs(false);
+      row.classList.add("pulse"); setTimeout(() => row.classList.remove("pulse"), 400);
+      clearTimeout(knobTimer); knobTimer = setTimeout(rerun, now ? 0 : 450);
+    };
+    range.addEventListener("input", () => set(+range.value));
+    less.addEventListener("click", () => set(+range.value - step, true));
+    more.addEventListener("click", () => set(+range.value + step, true));
+    outEl.textContent = Number(m[1]).toLocaleString("en-US");
+    box.append(row); knobs.push(k);
+  }
+}
+/* the numbers the knobs control glow in the code, so they are easy to find */
+function paintCode() {
+  const text = code.value, spans = [];
+  for (const k of knobs) {
+    const m = k.re.exec(text);
+    if (m) { const at = m.index + k.pat.indexOf("#"); spans.push([at, at + m[1].length]); }
+  }
+  spans.sort((a, b) => a[0] - b[0]);
+  const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  let html = "", pos = 0;
+  for (const [a, b] of spans) { if (a < pos) continue; html += esc(text.slice(pos, a)) + "<mark>" + esc(text.slice(a, b)) + "</mark>"; pos = b; }
+  $("hl").innerHTML = html + esc(text.slice(pos)) + "\n";
+  $("hl").scrollTop = code.scrollTop;
+}
+function flashKnobs(scroll) {
+  paintCode();
+  if (scroll && !document.body.classList.contains("diving")) code.scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "center" });
+  for (const m of $("hl").querySelectorAll("mark")) { m.classList.remove("flash"); void m.offsetWidth; m.classList.add("flash"); }
+}
+code.addEventListener("scroll", () => { $("hl").scrollTop = code.scrollTop; });
+function syncKnobs() { // the code was edited by hand: show its numbers, or hide a knob whose spot is gone
+  for (const k of knobs) {
+    const m = code.value.match(k.re);
+    k.row.hidden = !m;
+    if (m) { k.range.value = m[1]; k.outEl.textContent = Number(m[1]).toLocaleString("en-US"); }
+  }
+}
+function rerun() {
+  if (intro.on) endIntro();
+  if (!ready && !running) return;
+  if (running) { pendingRun = true; runProgram(); return; } // stop first; it runs again once the hunter is back
+  runProgram();
+}
+let pendingRun = false, runId = 0;
+const nowAt = { value: "", since: 0 };
+$("about-text").addEventListener("click", () => $("about").classList.toggle("open"));
+document.querySelector(".jump").addEventListener("click", (e) => { e.preventDefault(); $("code-panel").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth" }); });
+function loadExample(ex) { pick.value = ex.id; code.value = ex.src; showAbout(ex); renderKnobs(ex); paintCode(); }
 pick.addEventListener("change", () => {
   const ex = EXAMPLES.find((x) => x.id === pick.value);
   loadExample(ex); history.replaceState(null, "", "#" + ex.id);
@@ -529,10 +724,11 @@ $("share").addEventListener("click", async () => {
 function loadFromHash() {
   const h = location.hash.slice(1);
   if (h.startsWith("code=")) {
-    try { code.value = decode(h.slice(5)); showAbout(null); pick.selectedIndex = -1; reveal(); return; } catch {}
+    try { code.value = decode(h.slice(5)); showAbout(null); renderKnobs(null); paintCode(); pick.selectedIndex = -1; endIntro(); $("callout").hidden = true; return; } catch {}
   }
   loadExample(EXAMPLES.find((x) => x.id === h) || EXAMPLES[0]);
 }
+code.addEventListener("input", () => { syncKnobs(); paintCode(); });
 code.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); runProgram(); }
   else if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); code.setRangeText("  ", code.selectionStart, code.selectionEnd, "end"); }
@@ -541,7 +737,8 @@ runBtn.addEventListener("click", runProgram);
 
 if (innerWidth <= 820) document.querySelector("details.log").open = false;
 loadFromHash();
-setStatus("diving: loading the interpreter…", "busy");
+setStatus("loading…", "busy");
+if (intro.on) introLoading();
 startWorker();
 </script>
 </body>
