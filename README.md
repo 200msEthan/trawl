@@ -115,6 +115,32 @@ it adds) in [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 The test suite checks that both engines print exactly the same thing, and that all 160
 Tide programs from the original research print exactly what the old Tide engine printed.
 
+## Receipts: check a result without trusting the run
+
+Add `--receipt FILE` to `trawl run` or `trawl fast`, and the run leaves a small JSON file
+behind. It holds the program and every library it used (the full text), the Trawl version,
+how the program was run, and the SHA-256 of exactly what it printed. Anyone with the
+receipt can check it:
+
+```
+trawl fast hunt.trawl --receipt hunt.receipt
+trawl verify hunt.receipt        # re-runs it on the other engine and compares, byte for byte
+```
+
+A native run is re-checked by the reference interpreter by default, so a compiler bug can't
+vouch for itself (`--engine fast` re-runs it natively instead, for speed). A long sweep is
+too slow for the interpreter, so a saved run can be spot-checked instead:
+
+```
+trawl fast hunt.trawl --jobs 8 --save hunt.sav --receipt hunt.receipt
+trawl verify hunt.receipt --save hunt.sav --sample 8
+```
+
+This re-runs 8 random blocks of every sweep on the interpreter and checks them against
+the saved ones. Every other block is replayed from the save file, and the whole output must
+still match the receipt. A spot check is evidence, not proof: it catches a wrong block only
+if it happens to pick it.
+
 ## Tests
 
 ```

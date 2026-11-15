@@ -527,3 +527,63 @@ def test_playground_page_is_up_to_date():
     # playground/index.html embeds the interpreter; rebuild it when the interpreter changes
     r = subprocess.run([sys.executable, str(ROOT / "playground" / "build.py"), "--check"], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+# ---------------------------------------------------------------- receipts
+
+def trawl_cli(*args, cwd=None):
+    return subprocess.run([sys.executable, "-m", "trawl", *args], capture_output=True, text=True, encoding="utf-8",
+                          timeout=600, cwd=cwd, env={**os.environ, "PYTHONPATH": str(ROOT), "PYTHONIOENCODING": "utf-8"})
+
+
+def test_receipt_from_the_interpreter_verifies(tmp_path):
+    prog = tmp_path / "fibs.trawl"
+    prog.write_text("use stdlib\n10 fib . 20 fib .\n", encoding="utf-8")
+    rec = tmp_path / "fibs.receipt"
+    r = trawl_cli("run", str(prog), "--receipt", str(rec))
+    assert r.returncode == 0 and r.stdout == "55 6765 \n", r.stderr
+    import json
+    data = json.loads(rec.read_text(encoding="utf-8"))
+    assert set(data["program"]["files"]) == {"fibs.trawl", "stdlib.trawl"}  # the library travels with it
+    # it stands on its own: the program file can go away
+    prog.unlink()
+    r = trawl_cli("verify", str(rec), "--engine", "run")
+    assert r.returncode == 0 and "✓" in r.stdout and "same output" in r.stdout, r.stdout + r.stderr
+    if HAVE_CC:
+        r = trawl_cli("verify", str(rec))  # default: the other engine
+        assert r.returncode == 0 and "native compiler" in r.stdout, r.stdout + r.stderr
+    # a receipt that claims different output fails
+    data["output"]["sha256"] = "0" * 64
+    data["output"]["head"] = "55 6766 \n"
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--engine", "run")
+    assert r.returncode == 1 and "the output is different" in r.stdout and "line 1" in r.stdout, r.stdout
+    # and so does one whose program was edited afterwards
+    data["program"]["files"]["fibs.trawl"] = data["program"]["files"]["fibs.trawl"].replace("20", "21")
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--engine", "run")
+    assert r.returncode == 1 and "changed after it was made" in r.stdout
+
+
+@needs_cc
+def test_receipt_of_a_saved_sweep_spot_checks_blocks(tmp_path):
+    prog = tmp_path / "seven.trawl"
+    prog.write_text(SWEEP_PROG, encoding="utf-8")
+    rec, save = tmp_path / "seven.receipt", tmp_path / "seven.sav"
+    r = trawl_cli("fast", str(prog), "--jobs", "3", "--save", str(save), "--receipt", str(rec))
+    assert r.returncode == 0 and r.stdout == interp(SWEEP_PROG), r.stderr
+    r = trawl_cli("verify", str(rec), "--save", str(save), "--sample", "5", "--seed", "1")
+    assert r.returncode == 0 and "re-ran 5 saved blocks" in r.stdout and "replayed 251" in r.stdout, r.stdout + r.stderr
+    # a save file whose blocks were changed is not the one the receipt was made with
+    old = b"B 0 0 3000 0 11 1 2\n7 \n"
+    bad = tmp_path / "bad.sav"
+    bad.write_bytes(save.read_bytes().replace(old, b"B 0 0 3000 0 11 2 2\n7 \n"))
+    r = trawl_cli("verify", str(rec), "--save", str(bad), "--sample", "1")
+    assert r.returncode == 1 and "not the save file" in r.stdout
+    # without the receipt's save stamp, re-running that block still catches the wrong count
+    import json
+    data = json.loads(rec.read_text(encoding="utf-8"))
+    del data["save"]
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--save", str(bad), "--sample", "256")
+    assert r.returncode == 1 and "saved count 2, re-run count 1" in r.stdout, r.stdout

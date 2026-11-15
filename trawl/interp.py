@@ -26,6 +26,7 @@ class Sea:
         self.steps, self.max_steps, self.stream = 0, max_steps, stream
         self.tape, self.pos, self.sunk = ([] if tape is None else tape), 0, sunk
         self.pearls, self.echoes, self.echo_n = {}, {}, 0
+        self.sweep_depth, self.plan = 0, None  # plan: replays and spot-checks saved sweep blocks (trawl verify)
 
     # -- small helpers
     def pop(self, word, want=1):
@@ -113,16 +114,38 @@ class Sea:
         if name not in self.words:
             raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{name}` yet, so `sweep` can't run it.")
         check_sweep_range(lo, hi)
-        call, count = Word(name, node.tok), 0
-        for n in range(lo, hi):
-            depth = len(st)
-            st.append(n)
-            self.word(call)
-            if len(st) != depth + 1:
-                raise TrawlError(sweep_shape_error(name, n, len(st) - depth))
-            if st.pop():
-                count += 1
-        st.append(count)
+        call = Word(name, node.tok)
+
+        def block(a, b):
+            count = 0
+            self.sweep_depth += 1
+            try:
+                for n in range(a, b):
+                    depth = len(st)
+                    st.append(n)
+                    self.word(call)
+                    if len(st) != depth + 1:
+                        raise TrawlError(sweep_shape_error(name, n, len(st) - depth))
+                    if st.pop():
+                        count += 1
+            finally:
+                self.sweep_depth -= 1
+            return count
+
+        if self.plan is not None and self.sweep_depth == 0 and lo < hi:
+            st.append(self.plan.sweep(self, block, lo, hi))
+        else:
+            st.append(block(lo, hi))
+
+    def capture(self, fn):
+        """Run fn with everything it says kept aside; returns (text, fn's result)."""
+        stream, out = self.stream, self.out
+        self.stream, self.out = None, []
+        try:
+            result = fn()
+            return "".join(self.out), result
+        finally:
+            self.stream, self.out = stream, out
 
     def word(self, node):
         t, st = node.name, self.stack
@@ -336,10 +359,11 @@ def uses_worlds(prog):
     return walk(prog.body)
 
 
-def run(prog, max_steps=50_000_000, max_worlds=2_000_000, stream=None):
+def run(prog, max_steps=50_000_000, max_worlds=2_000_000, stream=None, plan=None):
     """Run a parsed program. Returns (printed text, worlds sunk or None)."""
     if not uses_worlds(prog):
         sea = Sea(max_steps=max_steps, stream=stream)
+        sea.plan = plan
         return sea.run(prog), None
     tape, kept, sunk, best = [], [], 0, None
     while True:
