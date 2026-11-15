@@ -2,6 +2,7 @@
 
   trawl run  prog.trawl     run with the reference interpreter (checks for stuck loops)
   trawl fast prog.trawl     build natively and run (the speed you want for real searches)
+                            --jobs N: sweeps on N cores; --save FILE: resume a long run
   trawl build prog.trawl    write a native program next to the source (prog, or prog.exe)
   trawl c    prog.trawl     print the generated C
   trawl repl                type Trawl and see the stack after each line
@@ -57,7 +58,12 @@ def cmd_fast(args):
         exe = os.path.join(tmp, "prog" + (".exe" if os.name == "nt" else ""))
         build(prog, exe, args.file)
         sys.stdout.flush()
-        sys.exit(subprocess.call([exe]))
+        extra = []
+        if args.jobs is not None:
+            extra += ["--jobs", str(args.jobs)]
+        if args.save:
+            extra += ["--save", os.path.abspath(args.save)]
+        sys.exit(subprocess.call([exe] + extra))
 
 
 def cmd_c(args):
@@ -93,7 +99,10 @@ def main(argv=None):
     r.add_argument("file"); r.add_argument("--max-steps", type=int, default=50_000_000)
     r.set_defaults(fn=cmd_run)
     f = sub.add_parser("fast", help="build natively and run")
-    f.add_argument("file"); f.set_defaults(fn=cmd_fast)
+    f.add_argument("file")
+    f.add_argument("-j", "--jobs", type=int, help="run each top-level sweep on this many cores (0 = all)")
+    f.add_argument("--save", metavar="FILE", help="keep finished sweep blocks in FILE; the same command again resumes")
+    f.set_defaults(fn=cmd_fast)
     b = sub.add_parser("build", help="build a native program")
     b.add_argument("file"); b.add_argument("-o", "--output"); b.add_argument("--keep-c")
     b.set_defaults(fn=cmd_build)

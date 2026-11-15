@@ -26,7 +26,21 @@ Program size, counting code characters without spaces or comments:
 | A343507 | 2225 | 2109 | 699 |
 | Collatz records | 190 | 163 | 112 |
 | Powers of 2 with no 0 | 372 | 338 | 60 |
-| Erdős 727, k = 4 | 788 | 826 | 280 |
+| Erdős 727, k = 4 | 788 | 758 | 280 |
+
+## Many cores
+
+`sweep` shares a search out over cores (`--jobs N`) with the output still in order. The same
+Erdős 727 k = 4 search, run further (t < 60000), on the same 4-core machine:
+
+| | 1 core | 4 cores |
+|---|---|---|
+| Trawl (`./k4 --jobs 4`, the program above with 60000) | 1.32 s | **0.37 s** |
+| PARI/GP (`k4.gp`; `k4_par.gp` with `parvector`, 4 threads) | 34.4 s | 10.1 s |
+
+Both print the same 2306 values of t. Trawl gets 3.6 times faster on 4 cores, PARI 3.4 times,
+so Trawl stays about 27 times ahead. With `--save run.sav`, a stopped run picks up where it
+left off.
 
 ## What this says
 
@@ -52,4 +66,4 @@ time gp -q collatz.gp < /dev/null
 
 The A343507 programs are `a343507.c` (`./a343507 10 10 3000000000 3300000000`),
 `../../examples/a343507.trawl` and `a343507.gp` (`search(10, 3000000000, 3300000000)`).
-The Erdős 727 programs are `k4.c`, `k4.trawl` and `k4.gp`.
+The Erdős 727 programs are `k4.c`, `k4.trawl` and `k4.gp`, plus `k4_par.gp` for PARI on many cores.

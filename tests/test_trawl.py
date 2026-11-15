@@ -168,6 +168,11 @@ def test_pearls(engine):
     ("-1 emit", "emit wants a character number"),
     ("1 spf", "spf needs a whole number of 2 or more, not 1"),
     ("-12 spf", "spf needs a whole number of 2 or more, not -12"),
+    ("1 5 sweep nope", "nobody in the sea knows the word `nope` yet, so `sweep` can't run it."),
+    (": two dup ; 1 5 sweep two", "`sweep two` wants `two` to turn each n into one answer, but at n = 1 it left 2 numbers in its place"),
+    (": gone drop ; 3 5 sweep gone", "but at n = 3 it left 0 numbers in its place"),
+    (": ok 1 ; 5 sweep ok", "`sweep` wanted 2 numbers"),
+    (": ok 1 ; 0 2 62 power sweep ok", "`sweep` runs from 0 up to 4611686018427387904, but both ends must lie between -2^62 and 2^62 - 1"),
 ])
 def test_errors(engine, src, msg):
     if engine is interp:
@@ -184,6 +189,8 @@ def test_errors(engine, src, msg):
     ("1 ]", "a stray `]`"),
     (": x 1", "never reached its `;`"),
     ("use nosuchlib", "no library called `nosuchlib`"),
+    ("1 2 sweep", "`sweep` needs the name of one of your words after it"),
+    ("1 2 sweep dup", "`sweep` needs the name of one of your words after it"),
 ])
 def test_errors_found_before_running(src, msg):
     with pytest.raises(TrawlError, match=msg):
@@ -215,6 +222,95 @@ def test_native_stops_a_runaway_stack(native):
 
 EDGE = [0, 1, -1, 2, -2, 3, 7, -7, 10, 2**31, 2**32 - 1, 2**61, 2**62 - 1, 2**62, -(2**62), -(2**62) - 1,
         2**63, -(2**63), 2**64 + 5, 10**30, -(10**30) - 7, 3**80, -(5**60)]
+
+
+SWEEPS = [
+    (": sq? dup * 1 + prime ; 1 100 sweep sq? .", "19 "),
+    (": show dup 7 % 0 = if dup . 1 else 0 then swap drop ; 1 50 sweep show .", "7 14 21 28 35 42 49 7 "),
+    (": any 1 ; 5 5 sweep any . 9 2 sweep any .", "0 0 "),
+    (": neg? 0 < ; -10 10 sweep neg? .", "10 "),
+    # each call sets the cells it reads; the stack below is left alone
+    (": odd? 2 % 7 bury 7 dig ; 42 0 21 sweep odd? . .", "10 42 "),
+    # a sweep inside a word, and a sweep inside the swept word
+    (": d? over swap % 0 = ; : divs dup 1 + 1 swap sweep d? swap drop ; : perfect? divs 4 = ; 1 30 sweep perfect? .", "9 "),
+    (": hunt 0 swap sweep perfect? ; : d? over swap % 0 = ; : divs dup 1 + 1 swap sweep d? swap drop ; : perfect? divs 2 = ; 100 hunt .", "25 "),
+    # a pearl word keeps its pearls across the sweep
+    (": slow dup * 3 % ; pearl slow 1 10 sweep slow . 1 10 sweep slow . .pearls", "6 6 (9 pearls) "),
+]
+
+
+@pytest.mark.parametrize("src,want", SWEEPS)
+def test_sweep(engine, src, want):
+    assert engine(src) == want + "\n"
+
+
+SWEEP_PROG = """
+# n with a digit sum of 7, printed as found; cell 5 is scratch, set before it is read
+: seven? 5 bury 5 dig 10 digsum 7 = dup if 5 dig . then ;
+." start " 10 emit
+0 3000 sweep seven? ." count " . 10 emit
+1 1 sweep seven? .
+"""
+
+
+@needs_cc
+def test_sweep_on_many_cores_matches_one_core(tmp_path):
+    exe = str(tmp_path / ("sw" + (".exe" if os.name == "nt" else "")))
+    build(parse(SWEEP_PROG), exe)
+    want = interp(SWEEP_PROG)
+    assert want.count(" ") > 50
+    for jobs in ("1", "3", "0", "64"):
+        r = subprocess.run([exe, "--jobs", jobs], capture_output=True, text=True, timeout=300)
+        assert r.returncode == 0, r.stderr
+        assert r.stdout == want, jobs
+
+
+@needs_cc
+def test_sweep_stops_cleanly_when_a_block_fails(tmp_path):
+    src = ": f? dup 1500 = if 0 0 / then dup 250 % 0 = if dup . then drop 1 ; 0 3000 sweep f? ."
+    exe = str(tmp_path / ("sf" + (".exe" if os.name == "nt" else "")))
+    build(parse(src), exe)
+    with pytest.raises(TrawlError, match="zero pieces"):
+        interp(src)
+    for jobs in ("1", "4"):
+        r = subprocess.run([exe, "--jobs", jobs], capture_output=True, text=True, timeout=300)
+        assert r.returncode == 1
+        assert r.stdout == "0 250 500 750 1000 1250 ", jobs  # everything printed before the failing n, in order
+        assert "you tried to split 0 into zero pieces" in r.stderr
+
+
+@needs_cc
+def test_sweep_resumes_from_a_save_file(tmp_path):
+    exe = str(tmp_path / ("sr" + (".exe" if os.name == "nt" else "")))
+    build(parse(SWEEP_PROG), exe)
+    want = interp(SWEEP_PROG)
+    save = tmp_path / "run.sav"
+
+    def go(*extra):
+        r = subprocess.run([exe, "--save", str(save), *extra], capture_output=True, text=True, timeout=300)
+        assert r.returncode == 0, r.stderr
+        return r
+
+    assert go().stdout == want
+    text = save.read_bytes()
+    records = text.split(b"\nB ")
+    assert len(records) == 1 + 256  # the header and 256 blocks (the empty second sweep has none)
+    # a run stopped partway: keep the first 100 blocks, then a torn half-written one
+    kept = b"\nB ".join(records[:101]) + b"\nB 0 0 3000 1"
+    save.write_bytes(kept)
+    r = go("--jobs", "4")
+    assert r.stdout == want and "resuming" in r.stderr and "100 finished blocks" in r.stderr
+    assert save.read_bytes() == text
+    # finished blocks really are replayed from the file, not run again: change one block's saved words
+    old = b"B 0 0 3000 0 11 1 2\n7 \n"  # the block n = 0..10: count 1, two bytes of words
+    assert old in text
+    save.write_bytes(text.replace(old, b"B 0 0 3000 0 11 1 6\nSEVEN \n"))
+    assert "SEVEN " in go().stdout
+    # a different program doesn't resume from it
+    exe2 = str(tmp_path / ("sr2" + (".exe" if os.name == "nt" else "")))
+    build(parse(SWEEP_PROG.replace("7 =", "8 =")), exe2)
+    r = subprocess.run([exe2, "--save", str(save)], capture_output=True, text=True, timeout=300)
+    assert "starts over" in r.stderr and r.stdout == interp(SWEEP_PROG.replace("7 =", "8 ="))
 
 
 def small_spf(n):
