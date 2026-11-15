@@ -1,0 +1,6 @@
+# Collatz records below 10^7 (OEIS A006877): n that take more steps to reach 1 than any smaller n
+: steps 0 swap dup 1 - [ drop dup 2 % if 3 * 1 + else 2 / then swap 1 + swap dup 1 - ] drop drop ;
+-1 -1 bury 1 -2 bury
+1 [ drop
+  -2 dig steps dup -1 dig > if -1 bury -2 dig . else drop then
+  -2 dig 1 + dup -2 bury 10000000 < ] drop

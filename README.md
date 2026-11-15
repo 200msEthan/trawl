@@ -38,8 +38,10 @@ alone opens an interactive prompt.
 Daniel Mizrahi found the first nine terms in 2021 with his own C program, up to
 a(9) = 2935782889, and the table has stopped there since.
 
-In November 2026, Claude research agents working for connabyss took on open problems like
-this one. Along the way they made up a tiny stack language, Tide, to run their experiments.
+Trawl didn't start with this problem. connabyss gave a few Claude agents a GitHub Codespace and
+told them to go wild. For fun, two of them made up a tiny stack language, Tide, and used it
+to poke at whatever interested them, which drifted toward odd patterns in the integers. On
+November 14, 2026, connabyss pointed them at real, famous open problems, this one among them.
 Their C searches found three more terms, and each was checked again with separate code:
 
 | | least k | found and checked | reproduced by the Trawl search |

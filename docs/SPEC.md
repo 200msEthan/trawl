@@ -4,8 +4,8 @@ Version 0.1. This page is the definition of Trawl. Where the two engines could e
 disagree, the reference interpreter (`trawl run`) is right, and the native compiler
 (`trawl fast`, `trawl build`) has a bug.
 
-Trawl began as Tide, a language two research Claudes made up while hunting patterns in
-integer sequences. Every Tide program runs unchanged in Trawl and prints the same thing.
+Trawl began as Tide, a language two Claude agents made up for fun in a Codespace, which
+they then used to explore patterns in the integers. Every Tide program runs unchanged in Trawl and prints the same thing.
 
 ## 1. Reading a program
 
