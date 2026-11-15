@@ -114,12 +114,17 @@ class Tee:
     def flush(self):
         self.real.flush()
 
+    def isatty(self):
+        return self.real.isatty()
+
     def data(self):
         return "".join(self.kept).encode("utf-8")
 
 
-def run_native_teed(cmd):
-    """Run a native program, passing its output through as it comes; returns (exit code, bytes)."""
+def run_native_teed(cmd, ticker=None, keep=True):
+    """Run a native program, passing its output through as it comes; returns (exit code, bytes).
+
+    With a progress Ticker, the output goes through it so its "still running" line is wiped first."""
     sys.stdout.flush()
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     kept = []
@@ -128,8 +133,11 @@ def run_native_teed(cmd):
         chunk = p.stdout.read1(65536) if hasattr(p.stdout, "read1") else p.stdout.read(65536)
         if not chunk:
             break
-        kept.append(chunk)
-        if out is not None:
+        if keep:
+            kept.append(chunk)
+        if ticker is not None:
+            ticker.write_bytes(chunk)
+        elif out is not None:
             out.write(chunk)
             out.flush()
         else:
@@ -207,8 +215,18 @@ def first_difference(want, got):
     return f"they part at line {line}: the receipt has {a[i:i + 40]!r}, this run printed {b[i:i + 40]!r}"
 
 
-def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=None, say=print):
-    """Check a receipt. Returns True when it holds."""
+def first_took(r):
+    from .progress import clock
+    s = r.get("seconds")
+    return f" (the first run, with trawl {r['engine']}, took {clock(s)})" if isinstance(s, (int, float)) and s >= 1 else ""
+
+
+def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=None, say=print, ticker=None):
+    """Check a receipt. Returns True when it holds.
+
+    The re-run itself is silent, so it happens inside a progress Ticker ("still checking... 1:12")."""
+    from .progress import Ticker
+    ticker = ticker or Ticker("still checking")
     with open(path, encoding="utf-8") as fh:
         r = json.load(fh)
     if r.get("receipt") != 1:
@@ -252,14 +270,18 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
                     return False
                 seed = random.randrange(1 << 30) if seed is None else seed
                 plan = Plan(recs, sample, seed)
-            out, sunk = run(prog, max_steps=max_steps, plan=plan)
+            say(f"re-running it on the reference interpreter{first_took(r)}")
+            with ticker:
+                out, sunk = run(prog, max_steps=max_steps, plan=plan)
             got = (out + "\n" if sunk is None else out + "\n" + f"({sunk} worlds sank along the way)\n").encode("utf-8")
             how = "the reference interpreter"
         else:
             from .cgen import build
             exe = os.path.join(tmp, "prog" + (".exe" if os.name == "nt" else ""))
             build(prog, exe, main_path)
-            p = subprocess.run([exe], capture_output=True)
+            say(f"re-running it on the native compiler{first_took(r)}")
+            with ticker:
+                p = subprocess.run([exe], capture_output=True)
             if p.returncode != 0:
                 say(f"✗ the native run stopped with an error: {p.stderr.decode('utf-8', 'replace').strip()}")
                 return False

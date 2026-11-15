@@ -141,6 +141,12 @@ the saved ones. Every other block is replayed from the save file, and the whole 
 still match the receipt. A spot check is evidence, not proof: it catches a wrong block only
 if it happens to pick it.
 
+A re-run takes about as long as the first run did, and verify says how long that was. While
+it works, and whenever `trawl run` or `trawl fast` goes quiet for more than a second, the
+terminal shows a `still checking... 1:12` line that ticks every second, then `~ done in 2:05`
+at the end. The line goes to stderr and only to a terminal, so piped output and receipts are
+exactly what the program printed (`TRAWL_PROGRESS=0` turns it off).
+
 ## Tests
 
 ```
