@@ -31,6 +31,10 @@ EXAMPLES = [
      "Halve even numbers, turn odd n into 3n + 1, and count the steps down to 1. This hunt catches every "
      "starting number that takes longer than all the smaller ones. Nobody has proved every number reaches 1.",
      "drag the slider to test more numbers. Bigger hunts take longer."),
+    ("curse", "The 196 curse",
+     "Flip a number's digits and add: 196 + 691 = 887. Keep going and most numbers soon read the same both "
+     "ways, like 121. Nobody knows if 196 ever does. This hunt catches every number still cursed after the flips.",
+     "test more numbers, or give each one more flips. Does a cursed number ever break free?"),
     ("hello", "A first look",
      "Numbers go on a stack and words use them up: 12 sq means 12 times 12. Numbers never overflow, and "
      "digits work in any base.",
@@ -73,6 +77,7 @@ EXAMPLES = [
 # knobs: big numbers to change without touching the code. (label, the code around the number with
 # "#" in its place, lowest, highest, step)
 KNOBS = {
+    "curse": [("Test every number up to", ": top # ;", 100, 2000, 100), ("Flips before giving up", ": limit # ;", 50, 400, 50)],
     "collatz": [("Test every number up to", "dup # <", 1000, 100000, 1000)],
     "hello": [("2 to the power", "# dup 2 swap power", 1, 3000, 1)],
     "rivers": [("Start the river at", "# 1 1 [", 1, 500, 1), ("How many stops", "dup # <", 2, 300, 1)],

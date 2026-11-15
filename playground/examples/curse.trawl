@@ -1,0 +1,23 @@
+# The 196 curse: flip a number's digits and add (196 + 691 = 887), then repeat.
+# Most numbers soon read the same both ways, like 121. Nobody knows if 196 ever does.
+# This hunt flags every number that is still not a palindrome after "limit" flips.
+: limit 300 ;
+: top 1000 ;
+: rev 0 swap [ dup 10 % rot 10 * + swap 10 / ] drop ;
+: flip dup rev + ;
+: going 2 dig dup rev = 0 =  3 dig limit <  * ;
+: steps flip 2 bury 1 3 bury
+  going [ drop 2 dig flip 2 bury 3 dig 1 + 3 bury going ] drop
+  2 dig dup rev = if 3 dig else 0 then ;
+0 4 bury 0 5 bury 0 6 bury 1 1 bury
+1 [ drop
+  1 dig steps dup 0 = if
+    drop 1 dig . ." is cursed: still no palindrome after " limit . ." flips" 10 emit
+    6 dig 1 + 6 bury
+  else
+    dup 4 dig > if 4 bury 1 dig 5 bury else drop then
+  then
+  1 dig 1 + 1 bury
+  1 dig top > 0 = ] drop
+6 dig . ." cursed numbers up to " top . 10 emit
+5 dig . ." is the most stubborn one that broke free, after " 4 dig . ." flips" 10 emit
