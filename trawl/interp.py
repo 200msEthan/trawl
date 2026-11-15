@@ -219,6 +219,11 @@ class Sea:
             if n < 2:
                 raise TrawlError(f"spf needs a whole number of 2 or more, not {n}")
             st.append(smallest_prime_factor(n))
+        elif t == "factorings":
+            n = self.pop(t)
+            if n < 1:
+                raise TrawlError(f"factorings needs a whole number of 1 or more, not {n}")
+            st.append(factorings(n))
         elif t == "power":
             k, a = self.pop(t, 2), self.pop(t, 2)
             if k < 0:
@@ -311,6 +316,49 @@ def _rho(n):
         if g != n:
             return g
         c += 1
+
+
+def signature(n):
+    """The exponents of n's prime factorization, largest first: 720 = 2^4 3^2 5 -> (4, 2, 1)."""
+    exps = []
+    while n > 1:
+        p, e = smallest_prime_factor(n), 0
+        while n % p == 0:
+            n //= p
+            e += 1
+        exps.append(e)
+    return tuple(sorted(exps, reverse=True))
+
+
+_FACTORINGS = {(): 1}
+
+
+def _factorings_of(v):
+    # Unordered factorizations depend only on the exponents. With v[0] the largest exponent,
+    # v[0] f(v) = sum over nonzero w <= v of c(w) f(v - w), where c(w) = sum over d | gcd(w) of w[0] / d.
+    # (Differentiate the Euler product for the generating function with respect to the first prime.)
+    if v in _FACTORINGS:
+        return _FACTORINGS[v]
+    from itertools import product
+    from math import gcd
+    total = 0
+    for w in product(*[range(a + 1) for a in v]):
+        g = 0
+        for x in w:
+            g = gcd(g, x)
+        if g == 0:
+            continue
+        c = sum(w[0] // d for d in range(1, g + 1) if g % d == 0)
+        if c:
+            rest = tuple(sorted((a - b for a, b in zip(v, w) if a > b), reverse=True))
+            total += c * _factorings_of(rest)
+    _FACTORINGS[v] = total // v[0]
+    return _FACTORINGS[v]
+
+
+def factorings(n):
+    """How many ways n is a product of whole numbers above 1, order ignored (OEIS A001055)."""
+    return _factorings_of(signature(n))
 
 
 def smallest_prime_factor(n):

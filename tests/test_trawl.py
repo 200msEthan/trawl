@@ -168,6 +168,7 @@ def test_pearls(engine):
     ("-1 emit", "emit wants a character number"),
     ("1 spf", "spf needs a whole number of 2 or more, not 1"),
     ("-12 spf", "spf needs a whole number of 2 or more, not -12"),
+    ("0 factorings", "factorings needs a whole number of 1 or more, not 0"),
     ("1 5 sweep nope", "nobody in the sea knows the word `nope` yet, so `sweep` can't run it."),
     (": two dup ; 1 5 sweep two", "`sweep two` wants `two` to turn each n into one answer, but at n = 1 it left 2 numbers in its place"),
     (": gone drop ; 3 5 sweep gone", "but at n = 3 it left 0 numbers in its place"),
@@ -681,3 +682,95 @@ def test_fast_with_the_running_line_prints_the_same(tmp_path):
     prog.write_text(SWEEP_PROG, encoding="utf-8")
     r = trawl_cli("fast", str(prog), progress="1")
     assert r.returncode == 0 and r.stdout == interp(SWEEP_PROG) and "~ done in" in r.stderr, r.stderr
+
+
+# ---------------------------------------------------------------- factorings and today's OEIS examples
+
+def brute_factorings(n, least=2):
+    """Ways to write n as a product of factors >= least, in nondecreasing order (independent check)."""
+    if n == 1:
+        return 1
+    return sum(brute_factorings(n // d, d) for d in range(least, n + 1) if n % d == 0)
+
+
+def test_factorings_counts_unordered_factorizations(engine):
+    want = " ".join(str(brute_factorings(n)) for n in range(1, 200)) + " "
+    assert engine("1 1 [ drop dup factorings . 1 + dup 200 < ] drop drop") == want + "\n"
+    # many primes: checked against the interpreter's count (on the native engine, a cross-check)
+    assert engine("2 10 power 3 5 power * 5 3 power * 7 * 11 * 13 * factorings .") == f"{factorings_py(2**10 * 3**5 * 5**3 * 7 * 11 * 13)} \n"
+    # one prime: the count is the number of partitions of the exponent (p(100) = 190569292)
+    assert engine("2 100 power factorings . 30 factorings . 1 factorings .") == "190569292 5 1 \n"
+
+
+def factorings_py(n):
+    from trawl.interp import factorings
+    return factorings(n)
+
+
+@needs_cc
+def test_factorings_reproduces_the_a398813_trajectory(native):
+    src = "2 31 power 3 14 power * 5 12 power * 1 [ drop dup . factorings dup 1 - ] drop"
+    assert native(src) == "2507653251072000000000000 729108451671600 10920630 2610 36 9 2 \n"
+
+
+def test_old_programs_keep_their_own_factorings(engine):
+    assert engine(": factorings 1 + ; 41 factorings .") == "42 \n"
+
+
+def a398813_small():
+    src = (ROOT / "examples" / "a398813.trawl").read_text(encoding="utf-8")
+    big = "2 31 power 3 14 power * 5 12 power * -2 bury  7 -7 bury"
+    assert big in src
+    return src.replace(big, "454164480 -2 bury  6 -7 bury")
+
+
+A398813_SMALL_OUT = """0 steps: 1 
+1 steps: 2 
+2 steps: 4 
+3 steps: 12 
+4 steps: 48 
+5 steps: 1728 
+6 steps: 454164480 
+up to 454164480 these take 6 or more steps:
+454164480 
+
+"""
+
+
+def test_a398813_example_finds_the_terms(engine):
+    # the shipped example proves a(7) the same way up to 2^31 3^14 5^12 (minutes on all cores)
+    assert engine(a398813_small(), str(ROOT / "examples" / "a398813.trawl")) == A398813_SMALL_OUT
+
+
+@needs_cc
+def test_a398813_example_on_many_cores(tmp_path):
+    exe = str(tmp_path / ("a398" + (".exe" if os.name == "nt" else "")))
+    build(parse(a398813_small(), str(ROOT / "examples" / "a398813.trawl")), exe)
+    r = subprocess.run([exe, "--jobs", "4"], capture_output=True, text=True, timeout=300)
+    assert r.returncode == 0 and r.stdout == A398813_SMALL_OUT
+
+
+SPIRAL_100 = ("1 2 1 3 1 4 1 5 1 3 1 6 1 7 1 2 1 8 1 2 1 3 1 9 1 2 1 10 1 2 1 3 1 11 1 3 1 5 1 3 1 6 1 7 1 2 "
+              "1 4 1 3 1 12 1 3 1 4 1 5 1 2 1 13 1 2 1 4 1 2 1 14 1 2 1 3 1 15 1 3 1 5 1 2 1 7 1 2 1 16 1 2 1 3 "
+              "1 17 1 3 1 6 1 3 ")
+
+
+def spiral(cells):
+    src = (ROOT / "examples" / "spiral_packing.trawl").read_text(encoding="utf-8")
+    assert "\n3355518 [" in src
+    return src.replace("\n3355518 [", f"\n{cells} [")
+
+
+def test_spiral_packing_example(engine):
+    out = engine(spiral(120))
+    first, *records = out.splitlines()
+    assert first == SPIRAL_100
+    cells = [int(r.split()[-1]) for r in records if r.startswith("value ")]
+    assert cells == [1, 2, 4, 6, 8, 12, 14, 18, 24, 28, 34, 52, 62, 70, 76, 88, 94, 106, 116]
+
+
+@needs_cc
+def test_spiral_packing_records_natively(native):
+    cells = [int(r.split()[-1]) for r in native(spiral(20000)).splitlines() if r.startswith("value ")]
+    assert cells == [1, 2, 4, 6, 8, 12, 14, 18, 24, 28, 34, 52, 62, 70, 76, 88, 94, 106, 116,
+                     150, 164, 540, 806, 820, 1212, 1988, 2530, 2734, 5822, 18136]  # values 1 .. 30
