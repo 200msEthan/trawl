@@ -98,6 +98,8 @@ kbd { font: 11px var(--mono); border: 1px solid var(--edge-strong); border-botto
 .catch.fresh { border-left-color: var(--sonar); background: rgba(10, 46, 60, .6); }
 .catch .num { font: 500 22px/1.1 var(--mono); color: var(--sonar); white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .catch .num.long { font-size: 16px; }
+.catch .say .big { all: unset; cursor: pointer; font-family: var(--mono); color: var(--sonar); border-bottom: 1px dotted currentColor; overflow-wrap: anywhere; }
+.catch .say .big:focus-visible { outline: 2px solid var(--sonar); outline-offset: 2px; }
 .catch .say { color: var(--muted); font-size: 14px; line-height: 1.35; min-width: 0; overflow-wrap: anywhere; }
 @keyframes arrive { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 details.log { border-top: 1px solid var(--edge); margin-top: auto; }
@@ -455,6 +457,21 @@ function lockOn(el, value) { // the number scrambles, then locks on digit by dig
     if (k < 1) requestAnimationFrame(step);
   })(start);
 }
+/* a number too long to read is shortened, and a tap shows it in full */
+function fillSay(el, text) {
+  let pos = 0;
+  for (const m of text.matchAll(/-?\d{25,}/g)) {
+    el.append(text.slice(pos, m.index));
+    const b = document.createElement("button"); b.type = "button"; b.className = "big";
+    const digits = m[0].replace("-", "").length, short = m[0].slice(0, 8) + "…" + m[0].slice(-6);
+    b.textContent = short; b.title = digits.toLocaleString("en-US") + " digits. Tap to see them all";
+    b.setAttribute("aria-label", digits + "-digit number, tap to see it in full");
+    b.dataset.short = short; b.dataset.full = m[0];
+    b.addEventListener("click", () => { const open = b.classList.toggle("open"); b.textContent = open ? b.dataset.full : b.dataset.short; });
+    el.append(b); pos = m.index + m[0].length;
+  }
+  el.append(text.slice(pos));
+}
 function addCatch(line, label) {
   const m = line.match(/^\s*(?:[A-Za-z]\w{0,3} = )?(-?\d+)/);
   if (!m) return false;
@@ -463,7 +480,7 @@ function addCatch(line, label) {
   const li = document.createElement("li"); li.className = "catch fresh" + (label ? " find" : "");
   const num = document.createElement("span"); num.className = "num" + (n.length > 12 ? " long" : "");
   num.title = n;
-  const say = document.createElement("span"); say.className = "say"; say.textContent = line.trim();
+  const say = document.createElement("span"); say.className = "say"; fillSay(say, line.trim());
   if (label) { const b = document.createElement("b"); b.textContent = label; say.prepend(b); }
   li.append(num, say);
   list.prepend(li);
@@ -503,10 +520,18 @@ let worker = null, ready = false, running = false, firstRun = true;
 /* ---------------------------------------------------------------- the guided intro
    Short captions right above the catches, where the eye already is. */
 const intro = { on: true, queue: [], busy: false, caught: false };
+let captionTimer = 0;
 function caption(html) {
   const c = $("caption");
   c.classList.add("out");
-  setTimeout(() => { c.innerHTML = html; c.classList.remove("out"); }, REDUCED ? 0 : 350);
+  clearTimeout(captionTimer);
+  captionTimer = setTimeout(() => { c.innerHTML = html; c.classList.remove("out"); }, REDUCED ? 0 : 350);
+}
+/* the "Still hunting" note belongs to one run: it goes away the moment that run ends */
+let stillTimer = 0, stillShown = false;
+function hideStill() {
+  clearTimeout(stillTimer);
+  if (stillShown) { stillShown = false; $("callout").hidden = true; }
 }
 function say(text, hold = 4500) {
   if (!intro.on) return;
@@ -521,9 +546,10 @@ function nextCaption() {
   if (typeof text === "function") text(); else caption(text);
   setTimeout(nextCaption, REDUCED ? Math.min(hold, 1500) : hold);
 }
+let climaxTimers = [];
 function climax() {
   [["19295451536", "10th"], ["91328826321", "11th"], ["1490709825264", "12th"]].forEach(([n, nth], i) =>
-    setTimeout(() => addCatch(`${n} is the ${nth} number in a list from an unsolved Erdős puzzle (OEIS A343507)`, "New to the world"), 300 + i * 1500));
+    climaxTimers[i] = setTimeout(() => addCatch(`${n} is the ${nth} number in a list from an unsolved Erdős puzzle (OEIS A343507)`, "New to the world"), 300 + i * 1500));
 }
 function endIntro() {
   if (!intro.on) return;
@@ -561,7 +587,7 @@ function startWorker() {
     if (m.type === "ready") {
       ready = true; runBtn.disabled = false; runBtn.textContent = "Run";
       setStatus("ready");
-      if (pendingRun) { pendingRun = false; runProgram(); return; }
+      if (pendingRun) { pendingRun = false; firstRun = false; runProgram(); reveal(); return; }
       if (firstRun) { firstRun = false; runProgram(); if (intro.on) introStart(); else reveal(); }
     } else if (m.type === "fail") {
       setStatus("couldn't start the interpreter. check your connection and reload.", "err"); reveal();
@@ -580,8 +606,8 @@ function startWorker() {
       running = false; runBtn.textContent = "Run"; runBtn.classList.remove("stop");
       $("now").textContent = "";
       finishLine();
-      if (intro.on) setTimeout(introDone, 1200);
-      else if ($("caption").textContent.startsWith("Still hunting")) $("callout").hidden = true;
+      hideStill();
+      if (intro.on) setTimeout(() => { if (intro.on) introDone(); }, 1200);
       if (m.status === "ok") {
         setStatus(`done in ${m.info < 1 ? Math.max(1, Math.round(m.info * 1000)) + " ms" : m.info.toFixed(1) + " s"}`, "ok");
         if (!out.textContent) out.textContent = "(nothing printed)";
@@ -599,12 +625,20 @@ function showError(msg) {
   s.textContent = (out.textContent && !out.textContent.endsWith("\n") ? "\n" : "") + "~ " + msg;
   out.append(s);
 }
+/* everything on screen that belongs to one run: cleared together, so nothing from an old run
+   or another example can stay behind */
+function resetView() {
+  out.textContent = ""; list.textContent = ""; lineBuf = ""; catchQueue.length = 0;
+  climaxTimers.forEach(clearTimeout); climaxTimers = [];
+  $("now").textContent = ""; nowAt.value = ""; alertBox.hidden = true; setCount(0);
+  hideStill();
+}
 function runProgram() {
   if (!ready) return;
   if (running) { // Stop: the only way to interrupt Python is a fresh worker
     worker.terminate(); running = false;
-    finishLine();
-    showError("stopped by you");
+    finishLine(); hideStill(); $("now").textContent = "";
+    if (!pendingRun) showError("stopped by you");
     runBtn.disabled = true; runBtn.textContent = "Restarting…"; runBtn.classList.remove("stop");
     setStatus("surfacing: restarting the interpreter…", "busy");
     startWorker();
@@ -612,14 +646,15 @@ function runProgram() {
   }
   if (!intro.on && !intro.justEnded) $("callout").hidden = true; // the tour is over: give the space to the catches
   intro.justEnded = false;
-  out.textContent = ""; list.textContent = ""; lineBuf = ""; catchQueue.length = 0; $("now").textContent = ""; alertBox.hidden = true; setCount(0);
+  resetView();
   running = true; runBtn.textContent = "Stop"; runBtn.classList.add("stop");
   setStatus("hunting…", "busy");
   worker.postMessage({ type: "run", src: code.value });
   const myRun = ++runId;
-  setTimeout(() => {
+  clearTimeout(stillTimer);
+  stillTimer = setTimeout(() => {
     if (running && runId === myRun && !intro.on) {
-      $("callout").hidden = false; $("skip").hidden = true;
+      stillShown = true; $("callout").hidden = false; $("skip").hidden = true;
       caption("<b>Still hunting.</b> Bigger numbers take longer here, and some hunts find nothing for a long time. Watch \"now at\" climb, or press Stop any time.");
     }
   }, 12000);
@@ -698,7 +733,7 @@ function syncKnobs() { // the code was edited by hand: show its numbers, or hide
 }
 function rerun() {
   if (intro.on) endIntro();
-  if (!ready && !running) return;
+  if (!ready && !running) { if (!firstRun) { pendingRun = true; resetView(); } return; }
   if (running) { pendingRun = true; runProgram(); return; } // stop first; it runs again once the hunter is back
   runProgram();
 }
@@ -710,7 +745,10 @@ function loadExample(ex) { pick.value = ex.id; code.value = ex.src; showAbout(ex
 pick.addEventListener("change", () => {
   const ex = EXAMPLES.find((x) => x.id === pick.value);
   loadExample(ex); history.replaceState(null, "", "#" + ex.id);
-  if (ready && !running) runProgram();
+  if (intro.on) endIntro();
+  if (running) { pendingRun = true; runProgram(); resetView(); } // stop the old hunt first; the new one starts once the hunter is back
+  else if (ready) runProgram();
+  else { resetView(); if (!firstRun) pendingRun = true; } // still loading or restarting: it runs as soon as the hunter is back
 });
 function encode(s) { return btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
 function decode(s) { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/")); return new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))); }
@@ -726,7 +764,9 @@ function loadFromHash() {
   if (h.startsWith("code=")) {
     try { code.value = decode(h.slice(5)); showAbout(null); renderKnobs(null); paintCode(); pick.selectedIndex = -1; endIntro(); $("callout").hidden = true; return; } catch {}
   }
-  loadExample(EXAMPLES.find((x) => x.id === h) || EXAMPLES[0]);
+  const ex = EXAMPLES.find((x) => x.id === h) || EXAMPLES[0];
+  loadExample(ex);
+  if (ex !== EXAMPLES[0]) endIntro(); // the tour is about the first example; a link to another one skips it
 }
 code.addEventListener("input", () => { syncKnobs(); paintCode(); });
 code.addEventListener("keydown", (e) => {
