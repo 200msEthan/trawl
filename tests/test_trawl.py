@@ -263,6 +263,12 @@ def test_sweep_on_many_cores_matches_one_core(tmp_path):
         r = subprocess.run([exe, "--jobs", jobs], capture_output=True, text=True, timeout=300)
         assert r.returncode == 0, r.stderr
         assert r.stdout == want, jobs
+    if os.name != "nt":
+        # started with SIGCHLD ignored (as some CI runners do): finished workers must not vanish unseen
+        import signal
+        ignore = lambda: signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+        r = subprocess.run([exe, "--jobs", "4"], capture_output=True, text=True, timeout=300, preexec_fn=ignore)
+        assert r.stdout == want and r.stderr == ""
 
 
 @needs_cc

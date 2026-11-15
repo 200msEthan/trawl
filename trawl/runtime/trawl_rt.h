@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <errno.h>
 #define rt_truncate(f, n) ((void)!ftruncate(fileno(f), (n)))
 #else
 #include <io.h>
@@ -1051,6 +1052,7 @@ static long rt_sweep(int pid, WordFn fn, const char *name, long sp) {
     Worker *w = (Worker *)calloc((size_t)nb, sizeof(Worker));
     int running = 0;
     sw_w = w;
+    signal(SIGCHLD, SIG_DFL); /* if SIGCHLD came in ignored, finished workers would vanish before wait() saw them */
     while (emit < nb) {
       sw_from = emit; sw_to = next;
       while (running < rt_jobs && next < nb && next - emit < window) {
@@ -1075,8 +1077,9 @@ static long rt_sweep(int pid, WordFn fn, const char *name, long sp) {
       }
       if (emit >= nb) break;
       int status = 0;
-      pid_t p = wait(&status);
-      if (p < 0) rt_die("lost track of the sweep workers");
+      pid_t p;
+      do p = wait(&status); while (p < 0 && errno == EINTR);
+      if (p < 0) rt_die("lost track of the sweep workers (%s)", strerror(errno));
       for (int64_t k = emit; k < next; k++)
         if (w[k].pid == p) {
           w[k].done = 1; w[k].status = status; running--;
