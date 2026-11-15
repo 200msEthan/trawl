@@ -76,6 +76,7 @@ Numbers go on a stack; words take from it and give back.
 2 100 power .          # 1267650600228229401496703205376 (never overflows)
 1234 10 digsum .       # 10, the digit sum in base 10
 1234 10 altsum .       # 2,  units - tens + hundreds - ...
+600851475143 spf .     # 71, the smallest prime factor (fast, even for 25-digit numbers)
 42 7 bury  7 dig .     # 42: the seabed is memory with numbered cells
 5 [ dup . 1 - ] drop   # 5 4 3 2 1: a loop runs while the top is nonzero
 ```
@@ -89,6 +90,7 @@ The words that make Trawl what it is:
 | `wave` `want` `more` `aim` | `1 9 wave` guesses a number; `want` rewinds to try the next guess when a condition fails; `more` collects every answer; `aim` keeps the best |
 | `pearl` | `pearl fib` makes a word remember its answers |
 | `digsum` `altsum` | digit sums in any base |
+| `prime` `spf` | primality and the smallest prime factor, built in and fast: they make the Erdős 727 search 14 times faster than PARI/GP's `factor()` ([benchmarks/vs](benchmarks/vs)) |
 
 ```
 : step dup * 31 % ;    # the rule x -> x^2 mod 31

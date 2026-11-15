@@ -72,6 +72,19 @@ static V big_alloc_from(int sign, const limb *d, int n, int permanent) {
   return (V)((uint64_t)(uintptr_t)b | 1u);
 }
 
+/* Long loops inside one built-in (prime, spf) make many short-lived big numbers that the
+ * garbage collector can't see. A scope frees the ones made since it began, except the live ones. */
+static Big *big_scope(void) { return big_list; }
+static void big_trim(Big *since, const V *live, int k) {
+  Big **p = &big_list;
+  while (*p && *p != since) {
+    Big *b = *p; int keep = b->mark != 0;
+    for (int i = 0; i < k && !keep; i++) if (!ISSMALL(live[i]) && BIGP(live[i]) == b) keep = 1;
+    if (keep) p = &b->next;
+    else { *p = b->next; big_bytes -= sizeof(Big) + sizeof(limb) * (size_t)b->n; free(b); }
+  }
+}
+
 /* view any value as sign + limbs; buf must hold 2 limbs */
 static Num num_view(V v, limb *buf) {
   Num r;
@@ -279,6 +292,149 @@ static V v_digits(V x, V b, int alternate) {
     x = q; if (alternate) g = -g;
   }
   return total;
+}
+
+/* ------------------------------------------------------------------ primes
+ * prime: strong probable-prime tests to the 13 prime bases 2..41 (exact below 3.3e24), the
+ * same tests as the interpreter. spf: trial division, then Pollard-Brent rho. Numbers that
+ * fit in 62 bits take a fast path with 128-bit products. */
+static const int PRIME_BASES[13] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41};
+
+static inline uint64_t u_mulmod(uint64_t a, uint64_t b, uint64_t m) { return (uint64_t)((unsigned __int128)a * b % m); }
+static uint64_t u_powmod(uint64_t a, uint64_t e, uint64_t m) {
+  uint64_t r = 1 % m; a %= m;
+  while (e) { if (e & 1) r = u_mulmod(r, a, m); a = u_mulmod(a, a, m); e >>= 1; }
+  return r;
+}
+static int u_isprime(uint64_t n) {
+  if (n < 2) return 0;
+  for (int i = 0; i < 13; i++) if (n % (uint64_t)PRIME_BASES[i] == 0) return n == (uint64_t)PRIME_BASES[i];
+  uint64_t d = n - 1; int s = 0;
+  while (!(d & 1)) { d >>= 1; s++; }
+  for (int i = 0; i < 13; i++) {
+    uint64_t x = u_powmod((uint64_t)PRIME_BASES[i], d, n);
+    if (x == 1 || x == n - 1) continue;
+    int ok = 0;
+    for (int j = 1; j < s; j++) { x = u_mulmod(x, x, n); if (x == n - 1) { ok = 1; break; } }
+    if (!ok) return 0;
+  }
+  return 1;
+}
+static uint64_t u_gcd(uint64_t a, uint64_t b) { while (b) { uint64_t t = a % b; a = b; b = t; } return a; }
+static uint64_t u_rho(uint64_t n) {
+  for (uint64_t c = 1;; c++) {
+    uint64_t y = 2, r = 1, q = 1, g = 1, x = 0, ys = 0;
+    while (g == 1) {
+      x = y;
+      for (uint64_t i = 0; i < r; i++) y = (u_mulmod(y, y, n) + c) % n;
+      for (uint64_t k = 0; k < r && g == 1; k += 128) {
+        ys = y;
+        for (uint64_t i = 0; i < 128 && i < r - k; i++) {
+          y = (u_mulmod(y, y, n) + c) % n;
+          q = u_mulmod(q, x > y ? x - y : y - x, n);
+        }
+        g = u_gcd(q, n);
+      }
+      r *= 2;
+    }
+    if (g == n) {
+      g = 1;
+      while (g == 1) { ys = (u_mulmod(ys, ys, n) + c) % n; g = u_gcd(x > ys ? x - ys : ys - x, n); }
+    }
+    if (g != n) return g;
+  }
+}
+static uint64_t u_spf(uint64_t n) {
+  if (!(n & 1)) return 2;
+  for (uint64_t i = 3; i < 1000; i += 2) {
+    if (i * i > n) return n;
+    if (n % i == 0) return i;
+  }
+  if (u_isprime(n)) return n;
+  uint64_t f = u_rho(n), a = u_spf(f), b = u_spf(n / f);
+  return a < b ? a : b;
+}
+
+/* the same, for big numbers */
+static V v_powmod(V a, V e, V m) {
+  Big *scope = big_scope();
+  V r = MKV(1);
+  a = v_mod(a, m);
+  while (v_cmp(e, 0) > 0) {
+    V q, bit; big_divmod(e, MKV(2), &q, &bit);
+    if (bit != 0) r = v_mod(v_mul(r, a), m);
+    a = v_mod(v_mul(a, a), m);
+    e = q;
+    V live[3] = {r, a, e}; big_trim(scope, live, 3);
+  }
+  return r;
+}
+static int big_isprime(V n) {
+  for (int i = 0; i < 13; i++) if (v_mod(n, MKV(PRIME_BASES[i])) == 0) return 0; /* n is big, so not the prime itself */
+  V nm1 = v_sub(n, MKV(1)), d = nm1; int s = 0;
+  for (;;) { V q, r; big_divmod(d, MKV(2), &q, &r); if (r != 0) break; d = q; s++; }
+  for (int i = 0; i < 13; i++) {
+    V x = v_powmod(MKV(PRIME_BASES[i]), d, n);
+    if (x == MKV(1) || v_cmp(x, nm1) == 0) continue;
+    int ok = 0;
+    Big *scope = big_scope();
+    for (int j = 1; j < s; j++) {
+      x = v_mod(v_mul(x, x), n);
+      if (v_cmp(x, nm1) == 0) { ok = 1; break; }
+      big_trim(scope, &x, 1);
+    }
+    if (!ok) return 0;
+  }
+  return 1;
+}
+static V v_gcd(V a, V b) {
+  Big *scope = big_scope();
+  a = v_abs(a); b = v_abs(b);
+  while (b != 0) { V t = v_mod(a, b); a = b; b = t; V live[2] = {a, b}; big_trim(scope, live, 2); }
+  return a;
+}
+static V big_rho(V n) {
+  Big *scope = big_scope();
+  for (int64_t c = 1;; c++) {
+    V y = MKV(2), q = MKV(1), g = MKV(1), x = 0, ys = 0, C = MKV(c);
+    int64_t r = 1;
+    while (g == MKV(1)) {
+      x = y;
+      for (int64_t i = 0; i < r; i++) { y = v_mod(v_add(v_mul(y, y), C), n); V live[3] = {x, y, q}; big_trim(scope, live, 3); }
+      for (int64_t k = 0; k < r && g == MKV(1); k += 128) {
+        ys = y;
+        for (int64_t i = 0; i < 128 && i < r - k; i++) {
+          y = v_mod(v_add(v_mul(y, y), C), n);
+          q = v_mod(v_mul(q, v_abs(v_sub(x, y))), n);
+          V live[4] = {x, y, ys, q}; big_trim(scope, live, 4);
+        }
+        g = v_gcd(q, n);
+      }
+      r *= 2;
+    }
+    if (v_cmp(g, n) == 0) {
+      g = MKV(1);
+      while (g == MKV(1)) { ys = v_mod(v_add(v_mul(ys, ys), C), n); g = v_gcd(v_sub(x, ys), n); V live[3] = {x, ys, g}; big_trim(scope, live, 3); }
+    }
+    if (v_cmp(g, n) != 0) return g;
+  }
+}
+static V big_spf(V n) {
+  if (ISSMALL(n)) return MKV(u_spf((uint64_t)SMALLN(n)));
+  if (v_mod(n, MKV(2)) == 0) return MKV(2);
+  for (int64_t i = 3; i < 1000; i += 2) if (v_mod(n, MKV(i)) == 0) return MKV(i);
+  if (big_isprime(n)) return n;
+  V f = big_rho(n), a = big_spf(f), b = big_spf(v_div(n, f));
+  return v_cmp(a, b) < 0 ? a : b;
+}
+
+static V v_prime(V n) {
+  if (ISSMALL(n)) return SMALLN(n) >= 2 && u_isprime((uint64_t)SMALLN(n)) ? MKV(1) : MKV(0);
+  return v_cmp(n, 0) > 0 && big_isprime(n) ? MKV(1) : MKV(0);
+}
+static V v_spf(V n) {
+  if (v_cmp(n, MKV(2)) < 0) { char *s = v_to_str(n); rt_die("spf needs a whole number of 2 or more, not %s", s); }
+  return big_spf(n);
 }
 
 /* ------------------------------------------------------------------ output */

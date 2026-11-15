@@ -166,6 +166,8 @@ def test_pearls(engine):
     ("2 -1 power", "tide numbers are whole: 2 to the power -1 would be a fraction"),
     ("1 9 wave 0 want", "every world sank (9 of them). the sea has no answer."),
     ("-1 emit", "emit wants a character number"),
+    ("1 spf", "spf needs a whole number of 2 or more, not 1"),
+    ("-12 spf", "spf needs a whole number of 2 or more, not -12"),
 ])
 def test_errors(engine, src, msg):
     if engine is interp:
@@ -213,6 +215,47 @@ def test_native_stops_a_runaway_stack(native):
 
 EDGE = [0, 1, -1, 2, -2, 3, 7, -7, 10, 2**31, 2**32 - 1, 2**61, 2**62 - 1, 2**62, -(2**62), -(2**62) - 1,
         2**63, -(2**63), 2**64 + 5, 10**30, -(10**30) - 7, 3**80, -(5**60)]
+
+
+def small_spf(n):
+    d = 2
+    while d * d <= n:
+        if n % d == 0:
+            return d
+        d += 1
+    return n
+
+
+def test_prime_and_spf(engine):
+    # every small n against plain trial division, then big numbers with known answers:
+    # Mersenne primes and composites, strong pseudoprimes to many bases, factors above the
+    # trial-division range (Pollard rho), squares of primes, and numbers past 64 bits
+    src = "-5 1 [ drop dup prime . 1 + dup 3000 < ] drop drop 10 emit 2 1 [ drop dup spf . 1 + dup 3000 < ] drop drop 10 emit"
+    want = " ".join(str(int(n >= 2 and small_spf(n) == n)) for n in range(-5, 3000)) + " \n"
+    want += " ".join(str(small_spf(n)) for n in range(2, 3000)) + " \n"
+    big = [
+        ("2 61 power 1 - prime", 1), ("2 89 power 1 - prime", 1), ("2 127 power 1 - prime", 1),
+        ("2 67 power 1 - prime", 0), ("2 67 power 1 - spf", 193707721),
+        ("3215031751 prime", 0), ("3825123056546413051 prime", 0), ("318665857834031151167461 prime", 0),
+        ("1000000007 1000000009 * prime", 0), ("1000000007 1000000009 * spf", 1000000007),
+        ("1000003 1000033 * 1000037 * spf", 1000003), ("1000003 dup * spf", 1000003),
+        ("600851475143 spf", 71), ("999999999999999989 prime", 1), ("4611686018427387903 prime", 0),
+        ("2 61 power 1 - 2 31 power 1 - * spf", 2**31 - 1), ("2 89 power 1 - 3 * spf", 3),
+        ("2 89 power 1 - spf", 2**89 - 1), ("1009 2 61 power 1 - * spf", 1009),
+    ]
+    src += "\n" + " ".join(f"{e} ." for e, _ in big)
+    want += " ".join(str(v) for _, v in big) + " "
+    assert engine(src) == want + "\n"
+
+
+def test_old_programs_keep_their_own_prime(engine):
+    # prime and spf became built-ins after Tide; a program that defines its own keeps it
+    assert engine(": prime drop 42 ;\n7 prime . 9 spf .\n: spf 1 + ;\n9 spf .") == "42 3 10 \n"
+
+
+def test_stdlib_prime_is_the_fast_builtin():
+    # the old library word did trial division: about 30,000 steps for this one number
+    assert interp("use stdlib 1000000007 1000000009 * prime . 1000000007 prime .", max_steps=2000) == "0 1 \n"
 
 
 def random_ints(rng, n):

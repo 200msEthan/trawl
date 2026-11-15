@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 
 from .lang import (Def, If, Loop, Num, PearlDecl, Program, Text, TrawlError, WANTS, Word,
-                   BUILTINS, suggest, where)
+                   BUILTINS, YOURS_WINS, suggest, where)
 
 RUNTIME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime")
 SMALL_MIN, SMALL_MAX = -(1 << 62), (1 << 62) - 1
@@ -410,7 +410,9 @@ class Gen:
     def word(self, f, node, at, top_level):
         t = node.name
         target = self.resolve(t, at, top_level)
-        if target is None and t in self.by_name:
+        if t in YOURS_WINS and top_level and target is not None and target >= at:
+            target = None  # the program's own word isn't defined yet: the built-in answers, as in the interpreter
+        if target is None and t in self.by_name and t not in YOURS_WINS:
             # used at the top level before any definition: the sea doesn't know it yet
             f.flush()
             msg = f"{where(node.tok)}: nobody in the sea knows the word `{t}` yet (it is defined further down)"
@@ -485,6 +487,10 @@ class Gen:
         elif t in ("digsum", "altsum"):
             b, x = f.pop(t, 2), f.pop(t, 2)
             f.push(f.temp(f"v_digits({x.expr}, {b.expr}, {1 if t == 'altsum' else 0})"))
+        elif t == "prime":
+            f.push(f.temp(f"v_prime({f.pop(t, 1).expr})"))
+        elif t == "spf":
+            f.push(f.temp(f"v_spf({f.pop(t, 1).expr})"))
         elif t == "power":
             k, a = f.pop(t, 2), f.pop(t, 2)
             f.push(f.temp(f"v_power({a.expr}, {k.expr})"))

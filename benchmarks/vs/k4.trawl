@@ -1,0 +1,46 @@
+# Erdős 727, k = 4 family n = 8t^4 - 18t^2 + 6, t < 5000, with the fast built-ins:
+# each factor is split with spf (smallest prime factor), and carries come from digit sums,
+# the same way the PARI version does it. Prints each t with ((n+4)!)^2 | (2n)!, then the count.
+# The pieces of (n+1)(n+2)(n+3)(n+4) sit in cells 5001..5011.
+
+: cells -50 bury
+  -50 dig dup * -51 bury
+  -51 dig 2 * 1 - 5001 bury   -51 dig 4 * 7 - 5002 bury   2 5003 bury
+  -51 dig 2 * -50 dig - 2 - 5004 bury   -51 dig 2 * -50 dig + 2 - 5005 bury
+  -51 dig 2 * 3 - 5006 bury   -51 dig 4 * 3 - 5007 bury   2 5008 bury
+  -50 dig 1 - 5009 bury   -50 dig 1 + 5010 bury   -51 dig 4 * 5 - 5011 bury ;
+: nof dup * dup dup * 8 * swap 18 * - 6 + ;
+
+# carries ( n p -- c ): carries when adding n + n in base p = (2 s(n) - s(2n)) / (p - 1)
+: carries -45 bury -46 bury
+  -46 dig -45 dig digsum 2 *  -46 dig 2 * -45 dig digsum -  -45 dig 1 - / ;
+
+# strip ( p -- v ): divide p out of every piece, counting how many times
+: strip -31 bury 0 -32 bury 5001 -17 bury
+  1 [ drop
+    -17 dig dig -33 bury
+    -33 dig -31 dig % 0 = [ drop
+      -33 dig -31 dig / -33 bury -32 dig 1 + -32 bury
+      -33 dig -31 dig % 0 = ] drop
+    -33 dig -17 dig bury
+    -17 dig 1 + -17 bury
+    -17 dig 5011 > 0 = ] drop
+  -32 dig ;
+
+# judge ( n -- flag ): every prime p of the product needs 2 * (its power) <= carries of n + n in base p
+: judge -19 bury 1 -37 bury 5001 -39 bury
+  1 [ drop
+    -39 dig dig 1 > if
+      -39 dig dig spf dup -38 bury strip 2 *  -19 dig -38 dig carries  > if 0 -37 bury then
+    else -39 dig 1 + -39 bury then
+    -39 dig 5011 > 0 =  -37 dig * ] drop
+  -37 dig ;
+
+: hunt -61 bury -60 bury 0 -62 bury
+  1 [ drop
+    -60 dig cells -60 dig nof judge if -60 dig . -62 dig 1 + -62 bury then
+    -60 dig 1 + -60 bury
+    -60 dig -61 dig < ] drop
+  ." count " -62 dig . 10 emit ;
+
+2 5000 hunt

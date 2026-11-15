@@ -58,6 +58,8 @@ effects are written `( before -- after )`, top of the stack on the right.
 | `/ %` | `( a b -- floor(a/b) )`, `( a b -- a mod b )` |
 | `= < >` | `( a b -- flag )` |
 | `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1) |
+| `prime` | `( n -- flag )` 1 if `n` is prime, else 0 (0 for `n < 2`). Exact below 3.3·10^24 (strong probable-prime tests to the first 13 primes, which no composite below that passes). Above it, it is a probable-prime test: right for any number you're likely to meet, but a composite built on purpose to fool those 13 tests would pass |
+| `spf` | `( n -- p )` the smallest prime factor of `n` (`n >= 2`; `n` itself when `n` is prime, by the same test as `prime`). Fast up to about 10^30; a number whose two smallest prime factors both have 20 or more digits can take a very long time |
 
 ## 5. Digits in any base
 

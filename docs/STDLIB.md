@@ -20,7 +20,7 @@ The original Tide toolbox, written in Tide itself. `use stdlib`
 | `slow-fib` | `( n -- F(n) )` | slow on purpose, a good job for pearls |
 | `gcd` | `( a b -- g )` | |
 | `divides` | `( a b -- flag )` | 1 if b divides a |
-| `prime` | `( n -- flag )` | trial division |
+| `prime` | `( n -- flag )` | now a built-in word, much faster (see the spec). `use stdlib` still works the same |
 | `cr` | `( -- )` | print a newline |
 
 ## numbers
