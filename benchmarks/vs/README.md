@@ -8,11 +8,12 @@ machine, one core each: Linux, Intel Xeon at 2.3 GHz, gcc 13 at `-O2`, PARI/GP 2
 |---|---|---|---|
 | **A343507**, m = 10, n in (3·10^9, 3.3·10^9]: log sieve + exact check | 2.6 s | 7.7 s | 216 s * |
 | **Collatz records** below 10^7 (A006877) | 3.0 s | 7.0 s | 386 s |
-| **Powers of 2 with no digit 0**, n ≤ 30000 (A007377) | 0.05 s | 0.45 s † | 7.2 s |
+| **Powers of 2 with no digit 0**, n ≤ 30000 (A007377) | 0.05 s | 0.14 s † | 7.2 s |
 | **Erdős 727, k = 4 family**, t < 5000 | 1.1 s ‡ | **0.05 s** | 0.7 s |
 
 \* PARI took 21.6 s for a tenth of the slice. Its sieve is linear, so 216 s is that time × 10.
-† The same Trawl program checking one digit at a time instead of nine takes 1.4 s.
+† The same Trawl program checking one digit at a time instead of nine takes 0.72 s. (Both were
+0.45 s and 1.4 s before big numbers learned to divide by small ones with a reciprocal, in one pass.)
 ‡ The C version uses trial division, following the original research program. Trawl splits each
 factor with its `spf` built-in (smallest prime factor, Pollard rho above small primes) and gets
 carries from digit sums, the same method as PARI's `factor()` version. The old trial-division
@@ -32,8 +33,9 @@ Program size, counting code characters without spaces or comments:
 - **On loop-heavy searches, Trawl is 28 to 55 times faster than PARI/GP and 2.2 to 3 times
   slower than hand-written C.** The gap to C comes from the tag check on every number (each one
   might have grown into a big integer) and the stack traffic around calls.
-- **On big-number digit work, Trawl is 10 times slower than C.** The C program keeps 2^n in
-  base 10^9 and looks at the low digits directly. Trawl divides the whole big number each time.
+- **On big-number digit work, Trawl is about 3 times slower than C.** The C program keeps 2^n in
+  base 10^9 and looks at the low digits directly. Trawl divides the whole big number each time,
+  but in one fast pass that gives both the remainder and the quotient.
 - **With the right built-in, Trawl wins there too.** On the k = 4 family, Trawl's `spf` makes it
   14 times faster than PARI's `factor()`. A C program with real factoring would close that gap;
   this one uses trial division, as the research did.

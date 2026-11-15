@@ -53,6 +53,8 @@ typedef struct Big { struct Big *next; uint32_t mark; int sign; int n; limb d[];
 static Big *big_list = NULL;
 static size_t big_bytes = 0, big_next_gc = (size_t)64 << 20;
 static int gc_due = 0; /* an int, not a V, so number stores can't alias it */
+/* `x d %` then `x d /` is common (taking digits off): the remainder pass also keeps the quotient */
+static Big *divc_a = NULL, *divc_q = NULL; static int64_t divc_d = 0;
 
 static V big_alloc_from(int sign, const limb *d, int n, int permanent) {
   n = mag_norm(d, n);
@@ -76,6 +78,7 @@ static V big_alloc_from(int sign, const limb *d, int n, int permanent) {
  * garbage collector can't see. A scope frees the ones made since it began, except the live ones. */
 static Big *big_scope(void) { return big_list; }
 static void big_trim(Big *since, const V *live, int k) {
+  divc_a = divc_q = NULL;
   Big **p = &big_list;
   while (*p && *p != since) {
     Big *b = *p; int keep = b->mark != 0;
@@ -218,6 +221,8 @@ static void rt_zero_split(V a) {
   char *s = v_to_str(a);
   rt_die("you tried to split %s into zero pieces. the ocean refuses.", s);
 }
+static V big_div_small(V a, int64_t y);
+static V big_div_small_r(V a, int64_t y, int64_t *rem);
 static inline V v_div(V a, V b) {
   if (LIKELY(BOTHSMALL(a, b))) {
     int64_t x = SMALLN(a), y = SMALLN(b);
@@ -228,9 +233,52 @@ static inline V v_div(V a, V b) {
       return MKV(q);
     }
   }
+  if (ISSMALL(b) && SMALLN(b) > 0 && SMALLN(b) < ((int64_t)1 << 32) && !ISSMALL(a) && BIGP(a)->sign > 0)
+    return big_div_small(a, SMALLN(b));
   V q; big_divmod(a, b, &q, NULL); return q;
 }
+/* a big number divided by a small one that fits in a limb: one pass, no scratch space */
+static inline limb mag_modsmall(const limb *a, int an, limb d) {
+  if (d == 1) return 0;
+  dlimb v = UINT64_MAX / d, r = 0;
+  for (int i = an - 1; i >= 0; i--) {
+    dlimb x = (r << 32) | a[i];
+    r = x - (dlimb)(((unsigned __int128)x * v) >> 64) * d;
+    while (r >= d) r -= d;
+  }
+  return (limb)r;
+}
+static V big_mod_small(V a, int64_t y) {
+  Big *b = BIGP(a);
+  uint64_t m = y < 0 ? (uint64_t)(-y) : (uint64_t)y;
+  int64_t r;
+  if (y > 0 && b->sign > 0 && b->n >= 8) { /* keep the quotient too, for a division that may follow */
+    V q = big_div_small_r(a, y, &r);
+    divc_a = b; divc_d = y; divc_q = ISSMALL(q) ? NULL : BIGP(q);
+  } else r = (int64_t)mag_modsmall(b->d, b->n, (limb)m);
+  if (r && (b->sign < 0) != (y < 0)) r = (int64_t)m - r; /* floor: the remainder takes the divisor's sign */
+  return MKV(y < 0 ? -r : r);
+}
+static V big_div_small_r(V a, int64_t y, int64_t *rem) { /* a > 0 big, 0 < y < 2^32 */
+  Big *b = BIGP(a);
+  size_t bytes = sizeof(Big) + sizeof(limb) * (size_t)b->n;
+  Big *q = (Big *)malloc(bytes);
+  if (!q) rt_die("the sea ran out of room for a %d-digit number", b->n * 10);
+  *rem = (int64_t)mag_divsmall(q->d, b->d, b->n, (limb)y);
+  int n = mag_norm(q->d, b->n);
+  if (n <= 2) { V v = big_alloc_from(1, q->d, n, 0); free(q); return v; }
+  q->sign = 1; q->n = n; q->mark = 0;
+  q->next = big_list; big_list = q; big_bytes += sizeof(Big) + sizeof(limb) * (size_t)n;
+  if (big_bytes > big_next_gc) gc_due = 1;
+  return (V)((uint64_t)(uintptr_t)q | 1u);
+}
+static V big_div_small(V a, int64_t y) {
+  if (divc_q && divc_a == BIGP(a) && divc_d == y) return (V)((uint64_t)(uintptr_t)divc_q | 1u);
+  int64_t r; return big_div_small_r(a, y, &r);
+}
 static inline V v_mod(V a, V b) {
+  if (ISSMALL(b) && !ISSMALL(a) && SMALLN(b) != 0 && SMALLN(b) > -((int64_t)1 << 32) && SMALLN(b) < ((int64_t)1 << 32))
+    return big_mod_small(a, SMALLN(b));
   if (LIKELY(BOTHSMALL(a, b))) {
     int64_t x = SMALLN(a), y = SMALLN(b);
     if (UNLIKELY(y == 0)) rt_zero_split(a);
@@ -284,6 +332,21 @@ static V v_digits(V x, V b, int alternate) {
     int64_t total = 0, g = 1;
     while (n) { total += g * (int64_t)(n % base); n /= base; if (alternate) g = -g; }
     return MKV(total);
+  }
+  if (ISSMALL(b) && SMALLN(b) < ((int64_t)1 << 32)) {
+    /* divide by base^k (the biggest power that fits in a limb) and take k digits from each remainder */
+    uint64_t base = (uint64_t)SMALLN(b), chunk = base; int k = 1;
+    while (chunk * base <= 0xFFFFFFFFu) { chunk *= base; k++; }
+    Big *xb = BIGP(x);
+    int n = xb->n;
+    limb *t = (limb *)malloc(sizeof(limb) * (size_t)n); memcpy(t, xb->d, sizeof(limb) * (size_t)n);
+    int64_t sum = 0, g = 1; /* |sum| < 2^32 per limb pass: no overflow below about 10^9 limbs */
+    while (n > 0) {
+      uint64_t r = mag_divsmall(t, t, n, (limb)chunk); n = mag_norm(t, n);
+      for (int i = 0; i < k && (n > 0 || r); i++) { sum += g * (int64_t)(r % base); r /= base; if (alternate) g = -g; }
+    }
+    free(t);
+    return MKV(sum);
   }
   V total = 0; int g = 1;
   while (x != 0) {
@@ -355,6 +418,91 @@ static uint64_t u_spf(uint64_t n) {
   return a < b ? a : b;
 }
 
+/* the same for numbers below 2^127, in Montgomery form with 128-bit words: much faster than
+ * the general big-number path, which allocates a new number for every step */
+typedef unsigned __int128 u128;
+typedef struct { u128 n, ni, one, r2; } Mont;
+static inline void w_mul(u128 a, u128 b, u128 *hi, u128 *lo) {
+  uint64_t a0 = (uint64_t)a, a1 = (uint64_t)(a >> 64), b0 = (uint64_t)b, b1 = (uint64_t)(b >> 64);
+  u128 p00 = (u128)a0 * b0, p01 = (u128)a0 * b1, p10 = (u128)a1 * b0, p11 = (u128)a1 * b1;
+  u128 mid = (p00 >> 64) + (uint64_t)p01 + (uint64_t)p10;
+  *lo = (u128)(uint64_t)p00 | (mid << 64);
+  *hi = p11 + (p01 >> 64) + (p10 >> 64) + (mid >> 64);
+}
+static inline u128 m_redc(const Mont *M, u128 hi, u128 lo) {
+  u128 m = lo * M->ni, mh, ml;
+  w_mul(m, M->n, &mh, &ml);
+  u128 t = hi + mh + (lo != 0);
+  return t >= M->n ? t - M->n : t;
+}
+static inline u128 m_mul(const Mont *M, u128 a, u128 b) { u128 hi, lo; w_mul(a, b, &hi, &lo); return m_redc(M, hi, lo); }
+static inline u128 m_add(const Mont *M, u128 a, u128 b) { u128 t = a + b; return t >= M->n ? t - M->n : t; }
+static Mont m_init(u128 n) { /* n odd, 3 <= n < 2^127 */
+  Mont M; M.n = n;
+  u128 inv = n; for (int i = 0; i < 7; i++) inv *= 2 - n * inv;
+  M.ni = (u128)0 - inv;
+  M.one = ((u128)0 - n) % n; /* 2^128 mod n */
+  u128 t = M.one; for (int i = 0; i < 128; i++) { t <<= 1; if (t >= n) t -= n; }
+  M.r2 = t;
+  return M;
+}
+static inline u128 m_to(const Mont *M, u128 x) { return m_mul(M, x % M->n, M->r2); }
+static u128 m_pow(const Mont *M, u128 a, u128 e) { u128 r = M->one; while (e) { if (e & 1) r = m_mul(M, r, a); a = m_mul(M, a, a); e >>= 1; } return r; }
+static int w_isprime(u128 n) { /* n odd, has no prime factor below 1000, n < 2^127 */
+  Mont M = m_init(n);
+  u128 d = n - 1; int s = 0;
+  while (!(d & 1)) { d >>= 1; s++; }
+  u128 minus1 = M.n - M.one;
+  for (int i = 0; i < 13; i++) {
+    u128 x = m_pow(&M, m_to(&M, (u128)PRIME_BASES[i]), d);
+    if (x == M.one || x == minus1) continue;
+    int ok = 0;
+    for (int j = 1; j < s; j++) { x = m_mul(&M, x, x); if (x == minus1) { ok = 1; break; } }
+    if (!ok) return 0;
+  }
+  return 1;
+}
+static u128 w_gcd(u128 a, u128 b) { while (b) { u128 t = a % b; a = b; b = t; } return a; }
+static u128 w_rho(u128 n) { /* Brent's rho on x -> x^2 + c, all in Montgomery form (gcds are unchanged by it) */
+  Mont M = m_init(n);
+  for (uint64_t c0 = 1;; c0++) {
+    u128 c = m_to(&M, c0), y = m_to(&M, 2), q = M.one, g = 1, x = 0, ys = 0;
+    uint64_t r = 1;
+    while (g == 1) {
+      x = y;
+      for (uint64_t i = 0; i < r; i++) y = m_add(&M, m_mul(&M, y, y), c);
+      for (uint64_t k = 0; k < r && g == 1; k += 128) {
+        ys = y;
+        for (uint64_t i = 0; i < 128 && i < r - k; i++) {
+          y = m_add(&M, m_mul(&M, y, y), c);
+          q = m_mul(&M, q, x > y ? x - y : y - x);
+        }
+        g = w_gcd(q, n);
+      }
+      r *= 2;
+    }
+    if (g == n) {
+      g = 1;
+      while (g == 1) { ys = m_add(&M, m_mul(&M, ys, ys), c); g = w_gcd(x > ys ? x - ys : ys - x, n); }
+    }
+    if (g != n) return g;
+  }
+}
+static u128 w_spf(u128 n) { /* n has no prime factor below 1000 */
+  if (n >> 62 == 0) return u_spf((uint64_t)n);
+  if (w_isprime(n)) return n;
+  u128 f = w_rho(n), a = w_spf(f), b = w_spf(n / f);
+  return a < b ? a : b;
+}
+static int v_to_w(V v, u128 *out) { /* a positive number below 2^127? */
+  if (ISSMALL(v)) { if (SMALLN(v) <= 0) return 0; *out = (u128)SMALLN(v); return 1; }
+  Big *b = BIGP(v);
+  if (b->sign <= 0 || b->n > 4 || (b->n == 4 && b->d[3] >> 31)) return 0;
+  u128 x = 0; for (int i = b->n - 1; i >= 0; i--) x = (x << 32) | b->d[i];
+  *out = x; return 1;
+}
+static V w_to_v(u128 x) { limb d[4]; for (int i = 0; i < 4; i++) { d[i] = (limb)x; x >>= 32; } return big_alloc_from(1, d, 4, 0); }
+
 /* the same, for big numbers */
 static V v_powmod(V a, V e, V m) {
   Big *scope = big_scope();
@@ -371,6 +519,7 @@ static V v_powmod(V a, V e, V m) {
 }
 static int big_isprime(V n) {
   for (int i = 0; i < 13; i++) if (v_mod(n, MKV(PRIME_BASES[i])) == 0) return 0; /* n is big, so not the prime itself */
+  u128 w; if (v_to_w(n, &w)) return w_isprime(w);
   V nm1 = v_sub(n, MKV(1)), d = nm1; int s = 0;
   for (;;) { V q, r; big_divmod(d, MKV(2), &q, &r); if (r != 0) break; d = q; s++; }
   for (int i = 0; i < 13; i++) {
@@ -423,6 +572,7 @@ static V big_spf(V n) {
   if (ISSMALL(n)) return MKV(u_spf((uint64_t)SMALLN(n)));
   if (v_mod(n, MKV(2)) == 0) return MKV(2);
   for (int64_t i = 3; i < 1000; i += 2) if (v_mod(n, MKV(i)) == 0) return MKV(i);
+  u128 w; if (v_to_w(n, &w)) return w_to_v(w_spf(w));
   if (big_isprime(n)) return n;
   V f = big_rho(n), a = big_spf(f), b = big_spf(v_div(n, f));
   return v_cmp(a, b) < 0 ? a : b;
@@ -734,6 +884,7 @@ static V *rt_consts = NULL; static int rt_nconsts = 0;
 static void mark(V v) { if (!ISSMALL(v)) { Big *b = BIGP(v); if (!b->mark) b->mark = 1; } }
 static V best_score = 0;
 static void gc_run(long sp) {
+  divc_a = divc_q = NULL;
   for (long i = 0; i < sp; i++) mark(S[i]);
   for (int64_t j = 0; j < (int64_t)bed_size; j++) mark(bed[j]);
   for (int64_t i = 0; i < hb_cap; i++) if (hb[i].full) mark(hb[i].val);

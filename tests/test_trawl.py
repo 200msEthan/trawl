@@ -242,6 +242,11 @@ def test_prime_and_spf(engine):
         ("600851475143 spf", 71), ("999999999999999989 prime", 1), ("4611686018427387903 prime", 0),
         ("2 61 power 1 - 2 31 power 1 - * spf", 2**31 - 1), ("2 89 power 1 - 3 * spf", 3),
         ("2 89 power 1 - spf", 2**89 - 1), ("1009 2 61 power 1 - * spf", 1009),
+        # between 2^62 and 2^127: the compiled 128-bit path
+        ("735644585302412067163926431748992513 spf", 796487719),
+        ("26531086772967102834702945502975055537 spf", 639676214759),
+        ("26531086772967102834702945502975055537 prime", 0), ("2 127 power 1 - 2 * spf", 2),
+        ("2 107 power 1 - prime", 1), ("2 107 power 1 - 2 19 power 1 - * spf", 2**19 - 1),
     ]
     src += "\n" + " ".join(f"{e} ." for e, _ in big)
     want += " ".join(str(v) for _, v in big) + " "
@@ -251,6 +256,31 @@ def test_prime_and_spf(engine):
 def test_old_programs_keep_their_own_prime(engine):
     # prime and spf became built-ins after Tide; a program that defines its own keeps it
     assert engine(": prime drop 42 ;\n7 prime . 9 spf .\n: spf 1 + ;\n9 spf .") == "42 3 10 \n"
+
+
+@needs_cc
+def test_big_division_by_small_numbers(native):
+    # big % small then big / small reuses one pass; different divisors, signs and garbage
+    # collection in between must not mix the answers up
+    rng = random.Random(11)
+    parts, want = [], []
+    for _ in range(300):
+        a = rng.getrandbits(rng.choice([300, 600, 2000])) * rng.choice([1, -1])
+        d, e = rng.choice([3, 10, 10**9, 2**32 - 1, -7]), rng.choice([10**9, 13, 2**31])
+        parts.append(f"{a} dup {d} % . dup {d} / . dup {e} / . {d} % .")
+        want += [a % d, a // d, a // e, a % d]
+        if rng.random() < 0.1:
+            parts.append("2 20000 power 300 dup [ drop swap 3 * swap 1 - dup ] drop drop drop")  # a lot of garbage
+    for base in (2, 3, 10, 36, 1000, 65537, 2**32 - 1):
+        a = rng.getrandbits(3000)
+        parts.append(f"{a} {base} digsum . {a} {base} altsum .")
+        x, t, alt, sign = a, 0, 0, 1
+        while x:
+            x, r = divmod(x, base)
+            t += r; alt += sign * r; sign = -sign
+        want += [t, alt]
+    src = "\n".join(parts)
+    assert native(src) == " ".join(map(str, want)) + " \n"
 
 
 def test_stdlib_prime_is_the_fast_builtin():
