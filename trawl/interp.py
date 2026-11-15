@@ -170,6 +170,13 @@ class Sea:
             self.digits(t, False)
         elif t == "altsum":
             self.digits(t, True)
+        elif t == "prime":
+            st.append(1 if is_prime(self.pop(t)) else 0)
+        elif t == "spf":
+            n = self.pop(t)
+            if n < 2:
+                raise TrawlError(f"spf needs a whole number of 2 or more, not {n}")
+            st.append(smallest_prime_factor(n))
         elif t == "power":
             k, a = self.pop(t, 2), self.pop(t, 2)
             if k < 0:
@@ -202,6 +209,82 @@ class Sea:
             st.append(self.sunk)
         else:
             raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{t}`.{suggest(t, self.words)}")
+
+
+
+# ---------------------------------------------------------------- primes
+# `prime` runs strong probable-prime tests to the 13 prime bases 2..41, which is exact for every
+# n below 3.3 * 10^24 (Sorenson and Webster, 2015). The native runtime runs the same tests, so the
+# two engines always agree. `spf` finds the smallest prime factor with trial division, then
+# Pollard-Brent rho.
+_BASES = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41)
+
+
+def is_prime(n):
+    if n < 2:
+        return False
+    for p in _BASES:
+        if n % p == 0:
+            return n == p
+    d, s = n - 1, 0
+    while d % 2 == 0:
+        d //= 2
+        s += 1
+    for a in _BASES:
+        x = pow(a, d, n)
+        if x == 1 or x == n - 1:
+            continue
+        for _ in range(s - 1):
+            x = x * x % n
+            if x == n - 1:
+                break
+        else:
+            return False
+    return True
+
+
+def _rho(n):
+    from math import gcd
+    c = 1
+    while True:
+        y, r, q, g = 2, 1, 1, 1
+        while g == 1:
+            x = y
+            for _ in range(r):
+                y = (y * y + c) % n
+            k = 0
+            while k < r and g == 1:
+                ys = y
+                for _ in range(min(128, r - k)):
+                    y = (y * y + c) % n
+                    q = q * abs(x - y) % n
+                g = gcd(q, n)
+                k += 128
+            r *= 2
+        if g == n:
+            g = 1
+            while g == 1:
+                ys = (ys * ys + c) % n
+                g = gcd(abs(x - ys), n)
+        if g != n:
+            return g
+        c += 1
+
+
+def smallest_prime_factor(n):
+    if n % 2 == 0:
+        return 2
+    i = 3
+    while i < 1000:
+        if i * i > n:
+            return n
+        if n % i == 0:
+            return i
+        i += 2
+    if is_prime(n):
+        return n
+    f = _rho(n)
+    return min(smallest_prime_factor(f), smallest_prime_factor(n // f))
 
 
 def _where(node):
