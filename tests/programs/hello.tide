@@ -1,0 +1,5 @@
+# Tide program: count down, then say hi
+5 [ dup . 1 - ] drop
+10 emit 105 104 emit emit 10 emit
+: sq dup * ;
+12 sq .

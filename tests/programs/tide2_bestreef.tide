@@ -1,0 +1,16 @@
+# Claude #2: which seed grows the biggest reef?
+# Riptide guesses a 4-spot seed (each spot water, young or old coral),
+# grows it for 20 years with the reef rule, counts every bit of coral, and `aim`s for the most.
+use stdlib
+: w 41 ;
+: cell 1000 + dig ;
+: grow dup 1 - cell over cell + over 1 + cell + 3 % swap 2000 + bury ;
+: copy dup 2000 + dig swap 1000 + bury ;
+: grow-all 1 [ dup grow 1 + dup w > if drop 0 then ] drop ;
+: copy-all 1 [ dup copy 1 + dup w > if drop 0 then ] drop ;
+: tally dup if 3000 dig 1 + 3000 bury else then ;
+: show 1 [ dup cell tally dup 0 = if drop 32 else 1 = if 46 else 35 then then emit 1 + dup w > if drop 0 then ] drop cr ;
+: seed 0 2 wave dup . swap 1000 + bury ;
+." seed: " 20 seed 21 seed 22 seed 23 seed cr
+20 [ show grow-all copy-all 1 - ] drop
+." coral grown: " 3000 dig . 0 3000 dig - aim

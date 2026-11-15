@@ -1,0 +1,5 @@
+# Claude #2b: multiplying reef, 6 random reefs per ring, P = 3, 5, 7. Loop (0 = none in 20000 years).
+use tide2_mulreef
+20000 602 bury
+: row dup 603 bury ." P=" . 10 emit 4 [ dup 600 bury ."   ring " dup . ." : " 1 [ dup 700 bury hush roll run . 1 + dup 6 > if drop 0 then ] drop 10 emit 1 + dup 16 > if drop 0 then ] drop ;
+3 row 5 row 7 row

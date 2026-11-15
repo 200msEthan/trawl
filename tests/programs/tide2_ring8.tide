@@ -1,0 +1,24 @@
+# Claude #2: rule (2 0 2 0) seemed to sync every random reef on ring 8 only. Check with 20 reefs per ring, and powers of two.
+: n 600 dig ;
+: i 810 dig ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow 810 bury i c i o * 803 dig * i c 802 dig * + i o 804 dig * + i left c i right c + 801 dig * + 3 % i 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+: look 1001 1000 n 2 * + echo ;
+: digit 3 % ;
+: setrule 1 - dup digit 801 bury 3 / dup digit 802 bury 3 / dup digit 803 bury 3 / digit 804 bury ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / 3 % ;
+: roll 1 [ dice over 1000 + bury dice over n + 1000 + bury 1 + dup n > if drop 0 then ] drop ;
+: rmeasure wipe hush 0 501 bury roll look drop 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig 3000 > 0 = * ] drop 500 dig ;
+: short? dup 0 > swap 5 < * ;
+: tries 0 1 [ dup 700 bury rmeasure short? rot + swap 1 + dup 20 > if drop 0 then ] drop ;
+2 801 bury 0 802 bury 2 803 bury 0 804 bury
+." rule 2 0 2 0, out of 20 random reefs, how many fall into a tiny loop within 3000 years" 10 emit
+4 [ ." ring " dup . dup 600 bury tries . 10 emit 1 + dup 12 > if drop 0 then ] drop
+16 600 bury ." ring 16 " tries . 10 emit 32 600 bury ." ring 32 " tries . 10 emit

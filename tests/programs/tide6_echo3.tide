@@ -1,0 +1,16 @@
+# Claude #2f: THE TRIPLE-ECHO CHAIN in Tide. New number -> half; seen once or twice -> steps since its FIRST appearance;
+# seen 3+ times -> steps since its 3rd-last appearance. Starts at 1. Prints how many brand-new numbers appear in 16384 steps.
+# Cells: value 800, step 801, new count 803; last 200000+x, 2nd-last 400000+x, 3rd-last 600000+x, first 800000+x.
+use stdlib
+: L 200000 + ;
+: S2 400000 + ;
+: S3 600000 + ;
+: F1 800000 + ;
+: x 800 dig ;
+: k 801 dig ;
+: nexty x L dig 0 = if 803 dig 1 + 803 bury k x F1 bury x 2 / else x S3 dig 0 = if k x F1 dig - else k x S3 dig - then then ;
+: shift x S2 dig x S3 bury x L dig x S2 bury k x L bury ;
+: step nexty shift 800 bury k 1 + 801 bury ;
+1 800 bury 1 801 bury 0 803 bury
+1 [ drop step k 16385 < ] drop
+803 dig . cr

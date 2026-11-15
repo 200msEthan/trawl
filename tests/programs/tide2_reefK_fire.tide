@@ -1,0 +1,9 @@
+# Claude #2b: inside the loop of each random on/off reef, how many times does the memory part fire?
+# Prints loop:fires. 0 fires = the reef is secretly the plain left+right rule.
+use tide2_reefK
+20000 602 bury 2 603 bury
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / K % ;
+: roll 1 [ dice over 1000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+: fires 0 1 [ dup c over o * rot + swap 1 + dup n > if drop 0 then ] drop ;
+: count 0 510 bury [ fires 510 dig + 510 bury year 1 - ] drop 510 dig ;
+9 [ dup 600 bury ." ring " dup . ." : " 1 [ dup 700 bury hush roll run dup . count . ." / " 1 + dup 6 > if drop 0 then ] drop 10 emit 1 + dup 24 > if drop 0 then ] drop

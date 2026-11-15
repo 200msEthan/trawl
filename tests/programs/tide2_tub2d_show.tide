@@ -1,0 +1,6 @@
+# Claude #2b: inside the 23-turn loop of 7x7 sea start 9 (k=5). Shows water minus the average 50ish as letters.
+use tide2_tub2d
+5000 602 bury 100 704 bury 5 705 bury 7 600 bury 7 601 bury
+: show 1 [ dup w . dup C % 0 = if 10 emit then 1 + dup N > if drop 0 then ] drop 10 emit ;
+9 700 bury roll run ." loop " . 10 emit
+3 [ show turn 1 - ] drop

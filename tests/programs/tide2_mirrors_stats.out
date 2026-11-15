@@ -1,0 +1,26 @@
+P=5 mod4=1 right-exits 0 total-path 23 
+P=7 mod4=3 right-exits 0 total-path 41 
+P=11 mod4=3 right-exits 0 total-path 54 
+P=13 mod4=1 right-exits 0 total-path 113 
+P=17 mod4=1 right-exits 0 total-path 134 
+P=19 mod4=3 right-exits 0 total-path 133 
+P=23 mod4=3 right-exits 0 total-path 265 
+P=29 mod4=1 right-exits 0 total-path 409 
+P=31 mod4=3 right-exits 0 total-path 569 
+P=37 mod4=1 right-exits 0 total-path 521 
+P=41 mod4=1 right-exits 0 total-path 755 
+P=43 mod4=3 right-exits 0 total-path 589 
+P=47 mod4=3 right-exits 0 total-path 933 
+P=53 mod4=1 right-exits 0 total-path 1422 
+P=59 mod4=3 right-exits 0 total-path 1162 
+P=61 mod4=1 right-exits 0 total-path 1749 
+P=67 mod4=3 right-exits 0 total-path 1874 
+P=71 mod4=3 right-exits 0 total-path 1717 
+P=73 mod4=1 right-exits 0 total-path 1901 
+P=79 mod4=3 right-exits 0 total-path 3245 
+P=83 mod4=3 right-exits 0 total-path 2870 
+P=89 mod4=1 right-exits 0 total-path 2633 
+P=97 mod4=1 right-exits 0 total-path 2061 
+P=101 mod4=1 right-exits 0 total-path 5729 
+P=103 mod4=3 right-exits 0 total-path 4561 
+

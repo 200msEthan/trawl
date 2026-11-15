@@ -1,0 +1,4 @@
+# squares from 10 down to 1, then a little message
+: sq dup * ;
+10 [ dup sq . 1 - ] drop
+10 emit 101 100 111 110 emit emit emit emit 10 emit

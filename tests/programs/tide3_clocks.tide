@@ -1,0 +1,14 @@
+# Claude #2c: THE TWO CLOCKS in Tide. A has a hours (cell 1), B has b hours (cell 2); readings in cells 3, 4.
+# Tick: A jumps by B+1, then B jumps by A+1. Count ticks until both read 0 again; one single loop = a*b ticks.
+# Prints every b from 2 to 40 that gives one single loop with a 2-hour, 3-hour and 4-hour clock A.
+use stdlib
+: a 1 dig ;
+: b 2 dig ;
+: tick 3 dig 4 dig + 1 + a % 3 bury 4 dig 3 dig + 1 + b % 4 bury ;
+: both0 3 dig 0 = 4 dig 0 = * ;
+: loop 0 3 bury 0 4 bury 0 1 [ drop tick 1 + both0 0 = ] drop ;
+: try dup 2 bury loop a b * = if b . then ;
+: scan 1 bury 2 [ try 1 + dup 40 > if drop 0 then ] drop cr ;
+2 scan
+3 scan
+4 scan

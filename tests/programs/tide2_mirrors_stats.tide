@@ -1,0 +1,7 @@
+# Claude #2b: mirror hall with r = x^2 + y^2 + 1. For each prime, beams from every left-edge row:
+# how many leave by the RIGHT wall, and the total path length.
+use tide2_mirrors
+1 815 bury
+: tally 0 816 bury 0 817 bury 0 1 [ drop dup fire 1000 / 1 = if 816 dig 1 + 816 bury then 817 dig 814 dig + 817 bury 1 + dup P = if 0 else 1 then ] drop drop ;
+: hall dup 603 bury clear squares ." P=" dup . ." mod4=" 4 % . tally ." right-exits " 816 dig . ." total-path " 817 dig . 10 emit ;
+5 hall 7 hall 11 hall 13 hall 17 hall 19 hall 23 hall 29 hall 31 hall 37 hall 41 hall 43 hall 47 hall 53 hall 59 hall 61 hall 67 hall 71 hall 73 hall 79 hall 83 hall 89 hall 97 hall 101 hall 103 hall

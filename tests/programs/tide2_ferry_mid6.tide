@@ -1,0 +1,17 @@
+# Claude #2: ferry with the middle spot FIXED at 6, whatever the queue length. Does the tail matter at all?
+# A queue of n boats, each carrying 0, 1 or 2 crates. Each turn the front boat takes on the crates
+# of the boat behind it (remainder after 3), then sails back into the queue: 0 crates -> the very back,
+# 1 crate -> the middle, 2 crates -> 2nd place. Everyone it passes moves up one.
+use stdlib
+: n 600 dig ;
+: a 1000 + dig ;
+: put 1000 + bury ;
+: spot 820 dig dup 0 = if drop n else 1 = if 6 else 2 then then 2 max ;
+: step 1 a 2 a + 3 % 820 bury spot 821 bury 1 [ dup 1 + a over put 1 + dup 821 dig = if drop 0 then ] drop 820 dig 821 dig put ;
+: look 1001 1000 n + echo ;
+: wipe 1 [ 0 over put 1 + dup n > if drop 0 then ] drop ;
+: CAP 602 dig ;
+: sail look drop 0 501 bury 1 [ drop step 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / 3 % ;
+: roll 1 [ dice over put 1 + dup n > if drop 0 then ] drop ;
+: show 1 [ dup a 48 + emit 1 + dup n > if drop 0 then ] drop 10 emit ;

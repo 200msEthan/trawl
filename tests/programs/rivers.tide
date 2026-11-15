@@ -1,0 +1,9 @@
+: n 1000 ;
+: lim 10000000 ;
+: flow dup 10 digsum 2 power + ;
+: keep-going dup lim < if dup dig 0 = else 0 then ;
+: endpoint keep-going [ drop flow keep-going ] drop ;
+: river-id dup endpoint dup lim < if dig else drop 0 then dup 0 = if drop 0 dig 1 + dup 0 bury then ;
+: paint river-id swap keep-going [ drop over over bury flow keep-going ] drop drop drop ;
+1 [ dup paint 1 + dup n > if drop 0 then ] drop
+." rivers for starts 1 to " n . ." : " 0 dig . 10 emit

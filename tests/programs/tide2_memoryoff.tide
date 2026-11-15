@@ -1,0 +1,15 @@
+# Claude #2: on an open sea, does the memory part (itself x last year) ever fire? Answer: 0 times in 200 years.
+: n 401 ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow dup c over o * over left c + over right c + 3 % swap 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+: count 0 1 [ dup c if swap 1 + swap then 1 + dup n > if drop 0 then ] drop ;
+: busy 0 1 [ dup c over o * if swap 1 + swap then 1 + dup n > if drop 0 then ] drop ;
+1 1001 bury
+0 200 [ swap busy + swap each-grow each-shift 1 - ] drop ." memory part fired at spot-years: " .

@@ -1,0 +1,17 @@
+# Claude #2: the reef with memory, on a ring, measured by Tide itself.
+# Rule M2: each spot becomes left + right + (itself x what it was last year), remainder after 3.
+# Current reef at 1001.., last year's reef right after it, so `echo` can watch both at once.
+: n 19 ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow dup c over o * over left c + over right c + 3 % swap 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: years 501 dig ;
+1 1001 bury
+1001 1000 n 2 * + echo drop
+1 [ drop each-grow each-shift 501 dig 1 + 501 bury 1001 1000 n 2 * + echo dup 500 bury 0 = ]
+drop ." ring " n . ." repeats every " 500 dig . ." years, first repeat in year " years .

@@ -1,0 +1,18 @@
+# A first look at Trawl. Run it:  trawl run hello.trawl   (or trawl fast hello.trawl)
+
+." count down: " 5 [ dup . 1 - ] drop 10 emit
+
+# words of your own
+: sq dup * ;
+." 12 squared is " 12 sq . 10 emit
+
+# numbers never overflow
+." 2 to the 100 is " 2 100 power . 10 emit
+
+# digits in any base: digit sum and alternating digit sum
+." 1234 in base 10: digit sum " 1234 10 digsum . ." alternating sum " 1234 10 altsum . 10 emit
+." 255 has this many 1 bits: " 255 2 digsum . 10 emit
+
+# the seabed: numbered memory cells
+42 7 bury
+." cell 7 holds " 7 dig . ." and the seabed looks like " .bed 10 emit

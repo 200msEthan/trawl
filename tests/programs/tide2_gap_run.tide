@@ -1,0 +1,6 @@
+# Claude #2b: first 60 numbers of the echo chain, then stats after 200000 steps.
+use tide2_gap
+start
+60 [ 800 dig . step 1 - ] drop 10 emit
+199940 [ step 1 - ] drop
+." distinct " 803 dig . ." biggest " 804 dig . ." smallest never seen " 0 1 [ drop dup last 0 = if 0 else 1 + 1 then ] drop . 10 emit

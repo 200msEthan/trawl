@@ -1,0 +1,18 @@
+# Claude #2: test the disguise. Rule M2 started from a 'hole' (every spot 2, one spot 0)
+# should give exactly the loops that rule (1 2 1 2) gave from a single polyp: 1 6 1 2 17 1 98 1 107 64 0 4
+: n 600 dig ;
+: i 810 dig ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow 810 bury i c i o * 803 dig * i c 802 dig * + i o 804 dig * + i left c i right c + 801 dig * + 3 % i 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+: look 1001 1000 n 2 * + echo ;
+: fill 1 [ 2 over 1000 + bury 1 + dup n 2 * > if drop 0 then ] drop 0 1001 bury ;
+: measure2 wipe hush 0 501 bury fill look drop 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig 600 > 0 = * ] drop 500 dig ;
+1 801 bury 0 802 bury 1 803 bury 0 804 bury
+." M2 from a hole: " 5 [ dup 600 bury measure2 . 1 + dup 16 > if drop 0 then ] drop

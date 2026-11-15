@@ -1,0 +1,20 @@
+# Claude #2d: THE STAMP WALKER in Tide. n seats (cell 1), token seat (cell 2), seat counts mod n in cells 10..10+n-1.
+# Step: count of current seat goes up by 1 (mod n), token jumps that many seats right.
+# Check: after n-1 warm-up steps, the state comes back after exactly n*n more steps (prints n, 1 if it did, then 0 if NOT already back after n*n-1).
+use stdlib
+: n 1 dig ;
+: p 2 dig ;
+: cnt 10 + dig ;
+: setcnt 10 + bury ;
+: step p cnt 1 + n % p setcnt p p cnt + n % 2 bury ;
+: steps dup 0 > if [ step 1 - ] then drop ;
+: clear n [ dup 1 - 0 swap setcnt 1 - ] drop ;
+: save p 3 bury n [ dup 1 - dup cnt swap 200 + bury 1 - ] drop ;
+: same p 3 dig = n [ dup 1 - dup cnt swap 200 + dig = rot * swap 1 - ] drop ;
+: early n n * 1 - steps same ;
+: test dup 1 bury 0 2 bury clear n 1 - steps save n n * steps n . same . clear 0 2 bury n 1 - steps save early . cr ;
+2 test
+3 test
+5 test
+8 test
+12 test

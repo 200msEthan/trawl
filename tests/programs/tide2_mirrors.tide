@@ -1,0 +1,13 @@
+# Claude #2b: THE MIRROR HALL. A P x P hall (603); cell (x,y) holds a mirror decided by r = x*x + y*y + s mod P (s at 815):
+# r a non-zero square mod P -> '/', r a non-square -> '\', r = 0 -> empty. A beam enters from the left edge
+# at row y going right; follow it until it leaves the hall. Exit code: side*1000 + position (0 left,1 right,2 top,3 bottom).
+use stdlib
+: P 603 dig ;
+: squares 1 [ dup dup * P % 5000 + 1 swap bury 1 + dup P = if drop 0 then ] drop ;
+: clear 0 5000 bury 1 [ 0 over 5000 + bury 1 + dup 200 > if drop 0 then ] drop ;
+: mirror 810 dig dup * 811 dig dup * + 815 dig + P % dup 0 = if drop 0 else 5000 + dig if 1 else 2 then then ;
+: turn mirror dup 1 = if drop 812 dig 813 dig 0 swap - 812 bury 0 swap - 813 bury else 2 = if 812 dig 813 dig 812 bury 813 bury then then ;
+: inside 810 dig 0 < 0 = 810 dig P < * 811 dig 0 < 0 = * 811 dig P < * ;
+: walk 0 814 bury 1 [ drop turn 810 dig 812 dig + 810 bury 811 dig 813 dig + 811 bury 814 dig 1 + 814 bury inside ] drop ;
+: exit 810 dig 0 < if 811 dig else 810 dig P < 0 = if 1000 811 dig + else 811 dig 0 < if 2000 810 dig + else 3000 810 dig + then then then ;
+: fire 811 bury 0 810 bury 1 812 bury 0 813 bury walk exit ;

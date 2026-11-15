@@ -1,0 +1,4 @@
+# a race between the interpreter and the compiler: sum of every prime below 20000
+use stdlib
+0 2 [ dup prime if swap over + swap then 1 + dup 20000 < if else drop 0 then ] drop
+." sum of primes below 20000: " .

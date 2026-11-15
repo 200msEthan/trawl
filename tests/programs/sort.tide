@@ -1,0 +1,9 @@
+# bury ten numbers on the seabed (addresses 1-10), then sort them in place
+42 1 bury 7 2 bury 19 3 bury 3 4 bury 88 5 bury 61 6 bury 25 7 bury 1 8 bury 50 9 bury 13 10 bury
+: show 1 [ dup dig . 1 + dup 11 = if drop 0 then ] drop ;
+: maybe-swap dup dig over 1 + dig over over > if rot swap over bury 1 + bury else drop drop drop then ;
+: pass 9 [ dup maybe-swap 1 - ] drop ;
+: sort 10 [ pass 1 - ] drop ;
+." before: " show
+sort
+10 emit ." after:  " show

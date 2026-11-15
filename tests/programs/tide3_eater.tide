@@ -1,0 +1,16 @@
+# Claude #2c: THE EATERS. A word of letters 0,1,2 kept at cells 10000+ (head in cell 1, end in cell 2).
+# Each turn the front letter a eats a+1 letters and the word grows a tail:
+# rule 12645 ("square clock"): 0 eats 1, adds 1 0 / 1 eats 2, adds 2 1 2 / 2 eats 3, adds 0 1.
+# Prints the step and the length minus 2s at every square step s*s: the length is always 2s+18 or 2s+17.
+use stdlib
+: H 1 dig ;
+: E 2 dig ;
+: get 10000 + dig ;
+: put E 10000 + bury E 1 + 2 bury ;
+: len E H - ;
+: grow dup 0 = if drop 1 put 0 put else dup 1 = if drop 2 put 1 put 2 put else drop 0 put 1 put then then ;
+: step H get dup 1 + H + 1 bury grow ;
+: start 0 1 bury 0 2 bury 1 put 0 put 2 put 2 put 0 put 2 put 2 put 2 put 2 put 2 put 0 put 2 put ;
+: show 3 dig dup * 4 dig = if 3 dig . len 3 dig 2 * - . cr 3 dig 1 + 3 bury then ;
+: main start 1 3 bury 0 4 bury 1 [ drop step 4 dig 1 + 4 bury show 4 dig 90000 < ] drop ;
+main

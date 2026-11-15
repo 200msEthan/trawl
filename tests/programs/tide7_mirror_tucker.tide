@@ -1,0 +1,17 @@
+# Claude #2g: THE MIRROR-ALTERNATING TUCKER in Tide. Even steps (parity 0) the top card v becomes the v-th card; odd steps (parity 1) the
+# (n+1-v)-th card. Each line deals a deck + start parity, plays until deck AND parity come back, prints n and the loop length.
+# C census (tide7_mirror_tucker.c) / proof say:  5 2 3 4 1 p1 -> 10 ; 9 2 7 4 5 6 3 8 1 p1 -> 18 ; 2 4 8 5 6 3 7 1 p0 -> 26 ; 2 4 3 5 1 p0 -> 2
+# Cells: n 1, v 5, slot 6, parity 8, saved parity 9, deck 11.., saved deck 31..
+use stdlib
+: n 1 dig ;
+: card 10 + dig ;
+: setcard 10 + bury ;
+: slot 8 dig if n 1 + 5 dig - else 5 dig then 6 bury ;
+: mtuck 1 card 5 bury slot 1 1 6 dig < [ drop dup 1 + card over setcard 1 + dup 6 dig < ] drop drop 5 dig 6 dig setcard 1 8 dig - 8 bury ;
+: save 1 1 [ drop dup card over 30 + bury 1 + dup n > 0 = ] drop drop 8 dig 9 bury ;
+: diff 0 1 1 [ drop dup card over 30 + dig = 0 = rot + swap 1 + dup n > 0 = ] drop drop 8 dig 9 dig = 0 = + ;
+: loop 0 1 [ drop mtuck 1 + diff ] drop ;
+5 1 bury 5 1 setcard 2 2 setcard 3 3 setcard 4 4 setcard 1 5 setcard 1 8 bury save loop n . . cr
+9 1 bury 9 1 setcard 2 2 setcard 7 3 setcard 4 4 setcard 5 5 setcard 6 6 setcard 3 7 setcard 8 8 setcard 1 9 setcard 1 8 bury save loop n . . cr
+8 1 bury 2 1 setcard 4 2 setcard 8 3 setcard 5 4 setcard 6 5 setcard 3 6 setcard 7 7 setcard 1 8 setcard 0 8 bury save loop n . . cr
+5 1 bury 2 1 setcard 4 2 setcard 3 3 setcard 5 4 setcard 1 5 setcard 0 8 bury save loop n . . cr

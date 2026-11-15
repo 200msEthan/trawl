@@ -1,0 +1,86 @@
+# numbers: everyday number-theory words for hunting, written in Trawl itself.
+#   use numbers
+#
+# These words keep their working values on the seabed at -65535 .. -65280.
+# Leave those cells alone in your own programs and the library will never step on you.
+#
+#   isqrt    ( n -- r )        floor of the square root of n (n >= 0)
+#   vp       ( n p -- e )      how many times p divides n (0 for n = 0)
+#   legendre ( n p -- e )      how many times the prime p divides n!
+#   carries  ( a b p -- c )    carries when adding a + b in base p
+#                              (Kummer: the power of p in the binomial C(a+b, a))
+#   powmod   ( b e m -- r )    b to the power e, mod m (e >= 0, m >= 1)
+#   ndigits  ( x base -- k )   how many digits x has in that base (0 has 1)
+#   reverse  ( x base -- y )   the digits of x in that base, read backwards
+#   smooth   ( n B -- flag )   1 if every prime factor of n is at most B
+#   nextprime ( n -- p )       the smallest prime above n
+
+use stdlib
+
+: isqrt dup 2 < if else
+    dup
+    over over / over + 2 /
+    over over > [ drop nip
+      over over / over + 2 /
+      over over > ] drop drop nip
+  then ;
+
+: vp -65535 bury -65534 bury 0 -65533 bury
+  -65534 dig 0 = 0 = if
+    -65534 dig -65535 dig % 0 = [ drop
+      -65534 dig -65535 dig / -65534 bury
+      -65533 dig 1 + -65533 bury
+      -65534 dig -65535 dig % 0 = ] drop
+  then
+  -65533 dig ;
+
+: legendre -65535 bury -65534 bury 0 -65533 bury
+  -65534 dig -65535 dig / -65534 bury
+  -65534 dig 0 > [ drop
+    -65533 dig -65534 dig + -65533 bury
+    -65534 dig -65535 dig / -65534 bury
+    -65534 dig 0 > ] drop
+  -65533 dig ;
+
+# digit sums do the work: carries = (s(a) + s(b) - s(a+b)) / (p - 1)
+: carries -65535 bury -65534 bury -65533 bury
+  -65533 dig -65535 dig digsum
+  -65534 dig -65535 dig digsum +
+  -65533 dig -65534 dig + -65535 dig digsum -
+  -65535 dig 1 - / ;
+
+: powmod -65535 bury -65534 bury -65535 dig % -65533 bury 1 -65535 dig % -65532 bury
+  -65534 dig 0 > [ drop
+    -65534 dig 2 % 1 = if -65532 dig -65533 dig * -65535 dig % -65532 bury then
+    -65533 dig -65533 dig * -65535 dig % -65533 bury
+    -65534 dig 2 / -65534 bury
+    -65534 dig 0 > ] drop
+  -65532 dig ;
+
+: ndigits -65535 bury abs -65534 bury 1 -65533 bury
+  -65534 dig -65535 dig / -65534 bury
+  -65534 dig 0 > [ drop
+    -65533 dig 1 + -65533 bury
+    -65534 dig -65535 dig / -65534 bury
+    -65534 dig 0 > ] drop
+  -65533 dig ;
+
+: reverse -65535 bury abs -65534 bury 0 -65533 bury
+  -65534 dig 0 > [ drop
+    -65533 dig -65535 dig * -65534 dig -65535 dig % + -65533 bury
+    -65534 dig -65535 dig / -65534 bury
+    -65534 dig 0 > ] drop
+  -65533 dig ;
+
+: smooth -65535 bury abs -65534 bury 2 -65533 bury
+  -65534 dig 1 >  -65533 dig -65533 dig * -65534 dig > 0 =  * [ drop
+    -65534 dig -65533 dig % 0 = if
+      -65533 dig -65535 dig > if 1 -65534 bury 0 -65535 bury then
+      -65534 dig -65533 dig / -65534 bury
+    else
+      -65533 dig 1 + -65533 bury
+    then
+    -65534 dig 1 >  -65533 dig -65533 dig * -65534 dig > 0 =  * ] drop
+  -65534 dig -65535 dig > 0 =  -65534 dig 0 >  * ;
+
+: nextprime 1 + dup prime 0 = [ drop 1 + dup prime 0 = ] drop ;

@@ -1,0 +1,24 @@
+# Claude #2e: SWAP THEOREM check in Tide. Each line: a deck with card 1 at the bottom, then the same deck with cards n-1 and n swapped.
+# Prints n, then (length of deck with n-1 above n) minus (length with n above n-1); the theorem says 2^(n-3).
+use stdlib
+: n 1 dig ;
+: card 10 + dig ;
+: setcard 10 + bury ;
+: tuck 1 card 5 bury 1 1 [ drop dup 1 + card over setcard 1 + dup 5 dig < ] drop drop 5 dig 5 dig setcard ;
+: play 0 1 card 1 = 0 = [ drop tuck 1 + 1 card 1 = 0 = ] drop ;
+5 1 bury 4 1 setcard 3 2 setcard 5 3 setcard 2 4 setcard 1 5 setcard play 7 bury 5 1 setcard 3 2 setcard 4 3 setcard 2 4 setcard 1 5 setcard play 7 dig swap - n . . cr
+5 1 bury 4 1 setcard 2 2 setcard 5 3 setcard 3 4 setcard 1 5 setcard play 7 bury 5 1 setcard 2 2 setcard 4 3 setcard 3 4 setcard 1 5 setcard play 7 dig swap - n . . cr
+6 1 bury 3 1 setcard 2 2 setcard 5 3 setcard 6 4 setcard 4 5 setcard 1 6 setcard play 7 bury 3 1 setcard 2 2 setcard 6 3 setcard 5 4 setcard 4 5 setcard 1 6 setcard play 7 dig swap - n . . cr
+6 1 bury 4 1 setcard 5 2 setcard 3 3 setcard 6 4 setcard 2 5 setcard 1 6 setcard play 7 bury 4 1 setcard 6 2 setcard 3 3 setcard 5 4 setcard 2 5 setcard 1 6 setcard play 7 dig swap - n . . cr
+7 1 bury 4 1 setcard 6 2 setcard 5 3 setcard 3 4 setcard 7 5 setcard 2 6 setcard 1 7 setcard play 7 bury 4 1 setcard 7 2 setcard 5 3 setcard 3 4 setcard 6 5 setcard 2 6 setcard 1 7 setcard play 7 dig swap - n . . cr
+7 1 bury 3 1 setcard 6 2 setcard 4 3 setcard 7 4 setcard 2 5 setcard 5 6 setcard 1 7 setcard play 7 bury 3 1 setcard 7 2 setcard 4 3 setcard 6 4 setcard 2 5 setcard 5 6 setcard 1 7 setcard play 7 dig swap - n . . cr
+8 1 bury 6 1 setcard 5 2 setcard 4 3 setcard 2 4 setcard 7 5 setcard 3 6 setcard 8 7 setcard 1 8 setcard play 7 bury 6 1 setcard 5 2 setcard 4 3 setcard 2 4 setcard 8 5 setcard 3 6 setcard 7 7 setcard 1 8 setcard play 7 dig swap - n . . cr
+8 1 bury 4 1 setcard 2 2 setcard 3 3 setcard 6 4 setcard 5 5 setcard 7 6 setcard 8 7 setcard 1 8 setcard play 7 bury 4 1 setcard 2 2 setcard 3 3 setcard 6 4 setcard 5 5 setcard 8 6 setcard 7 7 setcard 1 8 setcard play 7 dig swap - n . . cr
+9 1 bury 8 1 setcard 4 2 setcard 5 3 setcard 2 4 setcard 7 5 setcard 9 6 setcard 6 7 setcard 3 8 setcard 1 9 setcard play 7 bury 9 1 setcard 4 2 setcard 5 3 setcard 2 4 setcard 7 5 setcard 8 6 setcard 6 7 setcard 3 8 setcard 1 9 setcard play 7 dig swap - n . . cr
+9 1 bury 5 1 setcard 7 2 setcard 2 3 setcard 4 4 setcard 6 5 setcard 8 6 setcard 9 7 setcard 3 8 setcard 1 9 setcard play 7 bury 5 1 setcard 7 2 setcard 2 3 setcard 4 4 setcard 6 5 setcard 9 6 setcard 8 7 setcard 3 8 setcard 1 9 setcard play 7 dig swap - n . . cr
+10 1 bury 2 1 setcard 7 2 setcard 5 3 setcard 4 4 setcard 3 5 setcard 9 6 setcard 8 7 setcard 10 8 setcard 6 9 setcard 1 10 setcard play 7 bury 2 1 setcard 7 2 setcard 5 3 setcard 4 4 setcard 3 5 setcard 10 6 setcard 8 7 setcard 9 8 setcard 6 9 setcard 1 10 setcard play 7 dig swap - n . . cr
+10 1 bury 3 1 setcard 6 2 setcard 4 3 setcard 8 4 setcard 2 5 setcard 7 6 setcard 5 7 setcard 9 8 setcard 10 9 setcard 1 10 setcard play 7 bury 3 1 setcard 6 2 setcard 4 3 setcard 8 4 setcard 2 5 setcard 7 6 setcard 5 7 setcard 10 8 setcard 9 9 setcard 1 10 setcard play 7 dig swap - n . . cr
+11 1 bury 10 1 setcard 8 2 setcard 2 3 setcard 4 4 setcard 9 5 setcard 6 6 setcard 3 7 setcard 11 8 setcard 5 9 setcard 7 10 setcard 1 11 setcard play 7 bury 11 1 setcard 8 2 setcard 2 3 setcard 4 4 setcard 9 5 setcard 6 6 setcard 3 7 setcard 10 8 setcard 5 9 setcard 7 10 setcard 1 11 setcard play 7 dig swap - n . . cr
+11 1 bury 8 1 setcard 9 2 setcard 5 3 setcard 4 4 setcard 3 5 setcard 10 6 setcard 2 7 setcard 11 8 setcard 6 9 setcard 7 10 setcard 1 11 setcard play 7 bury 8 1 setcard 9 2 setcard 5 3 setcard 4 4 setcard 3 5 setcard 11 6 setcard 2 7 setcard 10 8 setcard 6 9 setcard 7 10 setcard 1 11 setcard play 7 dig swap - n . . cr
+12 1 bury 10 1 setcard 5 2 setcard 11 3 setcard 3 4 setcard 8 5 setcard 6 6 setcard 9 7 setcard 7 8 setcard 2 9 setcard 4 10 setcard 12 11 setcard 1 12 setcard play 7 bury 10 1 setcard 5 2 setcard 12 3 setcard 3 4 setcard 8 5 setcard 6 6 setcard 9 7 setcard 7 8 setcard 2 9 setcard 4 10 setcard 11 11 setcard 1 12 setcard play 7 dig swap - n . . cr
+12 1 bury 3 1 setcard 11 2 setcard 4 3 setcard 12 4 setcard 8 5 setcard 2 6 setcard 9 7 setcard 6 8 setcard 5 9 setcard 10 10 setcard 7 11 setcard 1 12 setcard play 7 bury 3 1 setcard 12 2 setcard 4 3 setcard 11 4 setcard 8 5 setcard 2 6 setcard 9 7 setcard 6 8 setcard 5 9 setcard 10 10 setcard 7 11 setcard 1 12 setcard play 7 dig swap - n . . cr

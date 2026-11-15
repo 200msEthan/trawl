@@ -1,0 +1,146 @@
+# OEIS A343507 / Erdos problem 727: the least n with ((n+m)!)^2 dividing (2n)!.
+#
+# Kummer: ((n+m)!)^2 | (2n)!  exactly when  ((n+1)...(n+m))^2 divides C(2n, n),
+# and the power of a prime p in C(2n, n) is the number of carries when n + n is added
+# in base p. A prime above sqrt(2n) gives at most one carry, so it can't divide any of
+# n+1 .. n+m: all m numbers must be sqrt(2n)-smooth. So: sieve for runs of m smooth
+# numbers (a log sieve, with 12 bits of slack, far below the 17+ bits of any forbidden
+# prime), then check each run exactly, prime by prime.
+#
+# usage: put   M START END search   at the bottom (searches n in (START, END]).
+
+# ---- variables on the seabed (negative addresses)
+# -1 start  -2 end  -3 m  -4 window size  -5 prime limit  -6 number of primes
+# -7 lo  -8 hi  -9 sieve bound  -10 prime index  -11 p  -12 log p  -13 q  -14 x
+# -15 threshold  -16 run  -17 i  -18 answer  -19 n  -20 offset (window - lo)
+# ---- tables on the seabed
+# 1000000+   composite flags (for finding primes)
+# 2000000+   the primes, in order
+# 3000000+   floor(4 log2 p) for each prime
+# 4000000+   the sieve window
+# 5000+      what is left of n+1 .. n+m after dividing out primes
+
+# isqrt ( x -- floor of the square root ), Newton's method
+: isqrt -40 bury -40 dig -41 bury
+  -40 dig 1 > if
+    -41 dig -40 dig -41 dig / + 2 / -42 bury
+    -42 dig -41 dig < [ drop
+      -42 dig -41 bury
+      -41 dig -40 dig -41 dig / + 2 / -42 bury
+      -42 dig -41 dig < ] drop
+  then -41 dig ;
+
+# log4 ( x -- floor(4 log2 x) ), the bit length of x^4, minus one
+: log4 4 power -43 bury 0 -44 bury
+  -43 dig 1 > [ drop -43 dig 2 / -43 bury -44 dig 1 + -44 bury -43 dig 1 > ] drop
+  -44 dig ;
+
+# carries ( n p -- c ): carries when n + n is added in base p
+: carries -45 bury -46 bury 0 -47 bury 0 -48 bury
+  -46 dig -48 dig + 0 > [ drop
+    -46 dig -45 dig % 2 * -48 dig + -45 dig < 0 = -48 bury
+    -47 dig -48 dig + -47 bury
+    -46 dig -45 dig / -46 bury
+    -46 dig -48 dig + 0 > ] drop
+  -47 dig ;
+
+# primes: sieve of Eratosthenes up to the prime limit
+: primes 0 -6 bury 2 -14 bury
+  1 [ drop
+    -14 dig 1000000 + dig 0 = if
+      -14 dig 2000000 -6 dig + bury
+      -14 dig log4 3000000 -6 dig + bury
+      -6 dig 1 + -6 bury
+      -14 dig -14 dig * -13 bury
+      -13 dig -5 dig > 0 = [ drop
+        1 -13 dig 1000000 + bury
+        -13 dig -14 dig + -13 bury
+        -13 dig -5 dig > 0 = ] drop
+    then
+    -14 dig 1 + -14 bury
+    -14 dig -5 dig > 0 = ] drop ;
+
+# strip ( p -- v ): divide p out of every leftover n+i, counting how many times
+: strip -31 bury 0 -32 bury 1 -17 bury
+  1 [ drop
+    -17 dig 5000 + dig -33 bury
+    -33 dig -31 dig % 0 = [ drop
+      -33 dig -31 dig / -33 bury -32 dig 1 + -32 bury
+      -33 dig -31 dig % 0 = ] drop
+    -33 dig -17 dig 5000 + bury
+    -17 dig 1 + -17 bury
+    -17 dig -3 dig > 0 = ] drop
+  -32 dig ;
+
+# ones ( -- flag ): is every leftover 1?
+: ones 1 -34 bury 1 -17 bury
+  1 [ drop
+    -17 dig 5000 + dig 1 = 0 = if 0 -34 bury then
+    -17 dig 1 + -17 bury
+    -17 dig -3 dig > 0 = ] drop
+  -34 dig ;
+
+# full ( n -- flag ): does ((n+m)!)^2 really divide (2n)! ? exact, prime by prime
+: full -19 bury
+  1 -17 bury 1 [ drop -19 dig -17 dig + -17 dig 5000 + bury -17 dig 1 + -17 bury -17 dig -3 dig > 0 = ] drop
+  -19 dig 2 * isqrt -35 bury
+  0 -36 bury 2 -37 bury
+  1 [ drop
+    2000000 -36 dig + dig -38 bury
+    -38 dig strip -39 bury
+    -39 dig 0 > if
+      -39 dig 2 * -19 dig -38 dig carries > if 0 -37 bury then
+    then
+    -37 dig 2 = if ones if 1 -37 bury then then
+    -36 dig 1 + -36 bury
+    -37 dig 2 =  2000000 -36 dig + dig -35 dig > 0 =  *  -36 dig -6 dig <  * ] drop
+  -37 dig 2 = if ones -37 bury then
+  -37 dig ;
+
+# sieve one window [lo, hi): add floor(4 log2 p) for every prime power dividing each number
+: window
+  -7 dig -4 dig + -8 bury
+  -8 dig 2 * isqrt 1 + -9 bury
+  4000000 -7 dig - -20 bury
+  0 -10 bury
+  1 [ drop
+    2000000 -10 dig + dig -11 bury
+    3000000 -10 dig + dig -12 bury
+    -11 dig -13 bury
+    1 [ drop
+      -7 dig -13 dig + 1 - -13 dig / -13 dig * -14 bury
+      -14 dig -8 dig < [ drop
+        -14 dig -20 dig + dup dig -12 dig + swap bury
+        -14 dig -13 dig + -14 bury
+        -14 dig -8 dig < ] drop
+      -13 dig -8 dig -11 dig / > if 0 else -13 dig -11 dig * -13 bury 1 then ] drop
+    -10 dig 1 + -10 bury
+    -10 dig -6 dig <  2000000 -10 dig + dig -9 dig > 0 =  * ] drop ;
+
+# scan the window for runs of m smooth numbers; check each run exactly.
+# Each cell is reset to 0 as it is read, so the next window starts clean.
+: scan
+  -7 dig log4 48 - -15 bury
+  0 -14 bury
+  1 [ drop
+    -14 dig 4000000 + dig -15 dig < if 0 -16 bury else -16 dig 1 + -16 bury then
+    0 -14 dig 4000000 + bury
+    -16 dig -3 dig < 0 = if
+      -7 dig -14 dig + -3 dig - -19 bury
+      -19 dig -1 dig > if -19 dig full if -19 dig -18 bury then then
+    then
+    -14 dig 1 + -14 bury
+    -14 dig -4 dig <  -18 dig 0 =  * ] drop ;
+
+# search ( m start end -- ): the least n in (start, end], or 0 if none
+: search -2 bury -1 bury -3 bury
+  1048576 -4 bury
+  -2 dig 2 * -4 dig 2 * + isqrt 2 + -5 bury
+  primes
+  0 -18 bury 0 -16 bury
+  -1 dig 1 + -7 bury
+  1 [ drop
+    window scan
+    -7 dig -4 dig + -7 bury
+    -18 dig 0 =  -7 dig -2 dig 64 + > 0 =  * ] drop
+  -18 dig ;

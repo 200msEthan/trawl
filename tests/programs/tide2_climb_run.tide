@@ -1,0 +1,4 @@
+# Claude #2b: climbers, cards dealt 1..n in order, loop length for n = 2..14 (0 = none by 2 million turns).
+use tide2_climb
+2000000 602 bury
+2 [ dup 600 bury hush deal run ." n=" over . . 10 emit 1 + dup 14 > if drop 0 then ] drop

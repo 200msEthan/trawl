@@ -1,0 +1,13 @@
+# Claude #2: a coral reef that grows itself, one row per year.
+# Rule I made up: each spot becomes (left + itself + right), remainder after 3.
+# 0 is open water, 1 is young coral (.), 2 is old coral (#). It starts from one polyp.
+use stdlib
+: w 41 ;
+: cell 1000 + dig ;
+: grow dup 1 - cell over cell + over 1 + cell + 3 % swap 2000 + bury ;
+: copy dup 2000 + dig swap 1000 + bury ;
+: grow-all 1 [ dup grow 1 + dup w > if drop 0 then ] drop ;
+: copy-all 1 [ dup copy 1 + dup w > if drop 0 then ] drop ;
+: show 1 [ dup cell dup 0 = if drop 32 else 1 = if 46 else 35 then then emit 1 + dup w > if drop 0 then ] drop cr ;
+1 21 1000 + bury
+20 [ show grow-all copy-all 1 - ] drop

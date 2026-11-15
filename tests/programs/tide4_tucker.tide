@@ -1,0 +1,15 @@
+# Claude #2d: THE TUCKER in Tide. Deck in cells 11..10+n (cell 11 = top). Top card v is tucked to be the v-th card.
+# Plays the deck 2 3 ... n 1 and prints n and the number of tucks (the proof says 2^(n-1)-1).
+use stdlib
+: n 1 dig ;
+: card 10 + dig ;
+: setcard 10 + bury ;
+: tuck 1 card 5 bury 1 1 [ drop dup 1 + card over setcard 1 + dup 5 dig < ] drop drop 5 dig 5 dig setcard ;
+: deal 1 1 [ drop dup 1 + over setcard 1 + dup n < ] drop drop 1 n setcard ;
+: play 0 1 card 1 = 0 = [ drop tuck 1 + 1 card 1 = 0 = ] drop ;
+: try 1 bury deal play n . . cr ;
+2 try
+3 try
+5 try
+8 try
+10 try

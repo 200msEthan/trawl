@@ -1,0 +1,2 @@
+: ds 0 swap [ dup 10 % rot + swap 10 / ] drop ;
+523663 dup . dup ds dup . dup * + dup . 10 emit [ dup 2 % if 0 else 2 / dup . then ]

@@ -1,0 +1,26 @@
+# Claude #2: reefs in ANY number of dimensions. A sea of side L in D dimensions, wrapping round
+# every way (a ring, a doughnut, a 3D doughnut, ...). Rule M2: each spot becomes the sum of its
+# 2 x D neighbours + (itself x last year), remainder after 3. Spots k = 0 .. L^D - 1.
+: L 600 dig ;
+: D 601 dig ;
+: pw 1 swap [ swap L * swap 1 - ] drop ;
+: N D pw ;
+: c 1001 + dig ;
+: o N + 1001 + dig ;
+: K 810 dig ;
+: coord pw / L % ;
+: up over over coord L 1 - = if pw L 1 - * - else pw + then ;
+: down over over coord 0 = if pw L 1 - * + else pw - then ;
+: nsum 0 1 [ dup 1 - K swap up c rot + swap dup 1 - K swap down c rot + swap 1 + dup D > if drop 0 then ] drop ;
+: grow 810 bury nsum K c K o * + 3 % K 3001 + bury ;
+: shift dup c over N + 1001 + bury dup 3001 + dig swap 1001 + bury ;
+: each-grow 1 [ dup 1 - grow 1 + dup N > if drop 0 then ] drop ;
+: each-shift 1 [ dup 1 - shift 1 + dup N > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup N 2 * > if drop 0 then ] drop ;
+: look 1001 1000 N 2 * + echo ;
+: CAP 602 dig ;
+: run-sea look drop 0 501 bury 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;
+: polyp wipe hush 1 1001 bury run-sea ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / 3 % ;
+: roll 1 [ dice over 1000 + bury 1 + dup N 2 * > if drop 0 then ] drop ;
+: random-sea wipe hush roll run-sea ;

@@ -1,0 +1,7 @@
+# Claude #2: pearls. slow-fib (from the stdlib) asks itself the same questions
+# millions of times. A pearled word remembers each answer it has worked out.
+use stdlib
+." slow, no pearls: 22 slow-fib = " 22 slow-fib . cr
+: kind-fib dup 2 < if else dup 1 - kind-fib swap 2 - kind-fib + then ;
+pearl kind-fib
+." with pearls:     90 kind-fib = " 90 kind-fib . .pearls cr

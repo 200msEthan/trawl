@@ -1,0 +1,7 @@
+# Claude #2b: bathtubs where each tub pours 1/k of its water (rounded down) to each neighbour, k = 2..6.
+# Prints only loops that are NOT 1, 2 or the ring size. 25 random rings per size 3..18, 0-99 cups.
+use tide2_tub
+20000 602 bury 100 704 bury
+: odd? dup 1 = over 2 = + over n = + 0 = ;
+2 [ dup 705 bury ." k=" dup . 10 emit 3 [ dup 600 bury 1 [ dup 700 bury hush roll run odd? if ."   tubs " n . ." loop " . 10 emit else drop then 1 + dup 25 > if drop 0 then ] drop 1 + dup 18 > if drop 0 then ] drop 1 + dup 6 > if drop 0 then ] drop
+." done" 10 emit

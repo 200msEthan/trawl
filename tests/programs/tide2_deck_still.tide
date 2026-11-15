@@ -1,0 +1,4 @@
+# Claude #2b: what do frozen decks look like? Show every random deck that ends in a loop of 1.
+use tide2_deck
+30000 602 bury
+9 [ dup 600 bury dup 1 - 603 bury 1 [ dup 700 bury wipe hush roll sail 1 = if show then 1 + dup 30 > if drop 0 then ] drop 1 + dup 14 > if drop 0 then ] drop

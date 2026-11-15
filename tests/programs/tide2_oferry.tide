@@ -1,0 +1,18 @@
+# Claude #2b: THE OPEN FERRY. Like the ferry, but where a boat sails depends on the PAIR
+# (its own crates a, the crates b it takes on), read from a rule table at 900 + a*K + b.
+# Codes: 0 = very back, 1 = middle, 2 = 2nd place. K = crate kinds (603). New load = a + b mod K.
+# So any load can reach the back and the tail cannot go quiet.
+use stdlib
+: n 600 dig ;
+: K 603 dig ;
+: a 1000 + dig ;
+: put 1000 + bury ;
+: pos dup 0 = if drop n else 1 = if n n 2 / - else 2 then then ;
+: step 1 a 2 a over over + K % 820 bury swap K * + 900 + dig pos 821 bury 1 [ dup 1 + a over put 1 + dup 821 dig = if drop 0 then ] drop 820 dig 821 dig put ;
+: look 1001 1000 n + echo ;
+: wipe 1 [ 0 over put 1 + dup n > if drop 0 then ] drop ;
+: CAP 602 dig ;
+: sail look drop 0 501 bury 1 [ drop step 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / K % ;
+: roll 1 [ dice over put 1 + dup n > if drop 0 then ] drop ;
+: show 1 [ dup a 48 + emit 1 + dup n > if drop 0 then ] drop 10 emit ;

@@ -1,0 +1,12 @@
+# Whirlpools: where does x -> x^2 mod 31 go? Every start falls into a loop.
+# `use orbits` gives `orbit` ( x -- tail loop ) for any rule named `step`.
+
+: step dup * 31 % ;
+use orbits
+
+." start  tail  loop" 10 emit
+1 [
+  dup . ."     " dup orbit swap . ."     " . 10 emit
+  1 + dup 10 >
+  if drop 0 then
+] drop

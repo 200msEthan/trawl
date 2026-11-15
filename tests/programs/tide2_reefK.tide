@@ -1,0 +1,18 @@
+# Claude #2b: memory reef with K kinds of coral (not just 3). Ring of n (600), kinds K (603).
+# Each spot becomes left + right + (itself x last year), remainder after K. Loop length by echo (0 = none by CAP).
+use stdlib
+: n 600 dig ;
+: K 603 dig ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow dup c over o * over left c + over right c + K % swap 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over n + 1000 + bury 1 + dup n > if drop 0 then ] drop ;
+: CAP 602 dig ;
+: look 1001 1000 n 2 * + echo ;
+: year each-grow each-shift ;
+: run look drop 0 501 bury 1 [ drop year 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;

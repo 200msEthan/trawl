@@ -1,0 +1,26 @@
+# Claude #2: reefs in 2D. A W x H sea that wraps round like a doughnut.
+# Rule M2 in 2D: each spot becomes north + south + east + west + (itself x last year), remainder after 3.
+# Spot k = 1..N. This year's reef at 1000+k, last year's right after it, so `echo` can watch both.
+: W 600 dig ;
+: H 601 dig ;
+: N W H * ;
+: c 1000 + dig ;
+: o N + 1000 + dig ;
+: K 810 dig ;
+: X 811 dig ;
+: Y 812 dig ;
+: at H + H % W * swap W + W % + 1 + c ;
+: xy 1 - dup W % swap W / ;
+: grow dup 810 bury xy 812 bury 811 bury X 1 + Y at X 1 - Y at + X Y 1 + at + X Y 1 - at + K c K o * + 3 % K 3000 + bury ;
+: shift dup c over N + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup N > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup N > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup N 2 * > if drop 0 then ] drop ;
+: look 1001 1000 N 2 * + echo ;
+: CAP 602 dig ;
+: run-sea look drop 0 501 bury 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig CAP > 0 = * ] drop 500 dig ;
+: polyp wipe hush 1 1001 bury run-sea ;
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / 3 % ;
+: roll 1 [ dice over 1000 + bury 1 + dup N 2 * > if drop 0 then ] drop ;
+: random-sea wipe hush roll run-sea ;
+: show 1 [ dup c dup 0 = if drop 32 else 1 = if 46 else 35 then then emit dup W % 0 = if 124 emit 10 emit then 1 + dup N > if drop 0 then ] drop ;

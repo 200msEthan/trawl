@@ -1,0 +1,8 @@
+# Claude #2b: the SWAP FERRY in Tide. Rule table 000200200: if the 2nd boat is empty and the front one
+# is not, the front boat drops to 2nd place (a swap); otherwise it adds the next boat's crates and goes to the back.
+# 6 random queues per length; full loop would be 8 x 3^(n-2).
+use tide2_oferry
+3 603 bury 30000 602 bury
+1 [ 0 over 899 + bury 1 + dup 9 > if drop 0 then ] drop
+2 903 bury 2 906 bury
+3 [ dup 600 bury ." boats " dup . ." : " 1 [ dup 700 bury wipe hush roll sail . 1 + dup 6 > if drop 0 then ] drop 10 emit 1 + dup 9 > if drop 0 then ] drop

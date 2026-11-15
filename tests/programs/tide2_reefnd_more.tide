@@ -1,0 +1,7 @@
+# Claude #2: higher dimensions. Side 3 in 5D, then the 5x5x5 sea (which froze from one polyp) with random starts.
+use tide2_reefnd
+1500 602 bury
+." side 3, 5D (243 spots), one polyp: " 3 600 bury 5 601 bury polyp . ." found at year " 501 dig . 10 emit
+." side 3, 6D (729 spots), one polyp: " 3 600 bury 6 601 bury polyp . ." found at year " 501 dig . 10 emit
+." side 5, 3D, one polyp freezes at year: " 5 600 bury 3 601 bury polyp drop 501 dig . 10 emit
+." side 5, 3D, 6 random seas, loop each: " 1 [ dup 700 bury random-sea . 1 + dup 6 > if drop 0 then ] drop 10 emit

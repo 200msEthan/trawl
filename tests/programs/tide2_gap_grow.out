@@ -1,0 +1,7 @@
+steps 25000 distinct 8086 biggest 21588 hole 2123 
+steps 50000 distinct 16229 biggest 44359 hole 4493 
+steps 100000 distinct 32459 biggest 88146 hole 8630 
+steps 200000 distinct 64751 biggest 187258 hole 15480 
+steps 400000 distinct 129461 biggest 370051 hole 28189 
+steps 800000 distinct 259013 biggest 752774 hole 51587 
+

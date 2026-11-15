@@ -1,0 +1,25 @@
+# Claude #2: is the ring-21 flat-sea sync luck? Random starts on ring 21, and polyps on multiples of 21.
+: n 600 dig ;
+: i 810 dig ;
+: c 1000 + dig ;
+: o n + 1000 + dig ;
+: left dup 1 = if drop n else 1 - then ;
+: right dup n = if drop 1 else 1 + then ;
+: grow 810 bury i c i o * 803 dig * i c 802 dig * + i o 804 dig * + i left c i right c + 801 dig * + 3 % i 3000 + bury ;
+: shift dup c over n + 1000 + bury dup 3000 + dig swap 1000 + bury ;
+: each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
+: each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
+: wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
+: look 1001 1000 n 2 * + echo ;
+: measure wipe hush 0 501 bury 1 1001 bury look drop 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig 10000 > 0 = * ] drop 500 dig ;
+1 801 bury 0 802 bury 1 803 bury 1 804 bury
+: dice 700 dig 1103515245 * 12345 + 2147483648 % dup 700 bury 65536 / 3 % ;
+: roll 1 [ dice over 1000 + bury dice over n + 1000 + bury 1 + dup n > if drop 0 then ] drop ;
+: rmeasure wipe hush 0 501 bury roll look drop 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig 10000 > 0 = * ] drop 500 dig ;
+: mirror n 2 + swap - dup n > if n - then ;
+: put over over 1000 + bury mirror 1000 + bury ;
+: putold over over n + 1000 + bury mirror n + 1000 + bury ;
+: mroll 1 [ dice over put dice over putold 1 + dup n 2 / 1 + > if drop 0 then ] drop ;
+: mmeasure wipe hush 0 501 bury mroll look drop 1 [ drop each-grow each-shift 501 dig 1 + 501 bury look dup 500 bury 0 = 501 dig 10000 > 0 = * ] drop 500 dig ;
+." ring 21, 12 random MIRROR reefs: " 21 600 bury 1 [ dup 700 bury mmeasure . 1 + dup 12 > if drop 0 then ] drop 10 emit
+." one polyp on rings 41 42 63 84: " 41 600 bury measure . 42 600 bury measure . 63 600 bury measure . 84 600 bury measure . 10 emit

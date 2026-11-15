@@ -1,0 +1,12 @@
+# Claude #2g: THE 3/5 ECHO CHAIN in Tide. New number x -> floor(3x/5); seen -> steps since its last appearance.
+# Starts at 1. Prints how many brand-new numbers appear in 16384 steps (must equal tide7_echoab.c: start 1, A=3, B=5).
+# Cells: value 800, step 801, new count 803; last appearance of x at 200000+x.
+use stdlib
+: L 200000 + ;
+: x 800 dig ;
+: k 801 dig ;
+: nexty x L dig 0 = if 803 dig 1 + 803 bury x 3 * 5 / else k x L dig - then ;
+: step nexty k x L bury 800 bury k 1 + 801 bury ;
+1 800 bury 1 801 bury 0 803 bury
+1 [ drop step k 16385 < ] drop
+803 dig . cr

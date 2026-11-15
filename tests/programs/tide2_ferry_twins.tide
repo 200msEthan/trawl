@@ -1,0 +1,7 @@
+# Claude #2: ferry twins. Same random queue, sailed once with n boats and once with one extra boat on the back.
+# If the loop lengths match seed by seed, the extra boat is invisible.
+use tide2_ferry
+20000 602 bury
+: pair dup 700 bury wipe hush 600 dig 1 + 600 bury roll sail ." with extra boat " . 600 dig 1 - 600 bury dup 700 bury wipe hush roll sail ." without " . ." | " ;
+: test dup 600 bury ." boats " . ." : " 1 [ pair 1 + dup 6 > if drop 0 then ] drop 10 emit ;
+7 test 13 test 21 test 25 test 8 test 14 test
