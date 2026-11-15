@@ -1,0 +1,11 @@
+# n <= 30000 where 2^n has no digit 0 (OEIS A007377)
+# zerofree ( x -- flag ): peel digits off the bottom until a 0 shows up or x runs out
+: zerofree -1 bury 1 -2 bury
+  -1 dig [ drop
+    -1 dig 10 % 0 = if 0 -2 bury 0 -1 bury else -1 dig 10 / -1 bury then
+    -1 dig ] drop
+  -2 dig ;
+1 -3 bury 1 -4 bury
+1 [ drop
+  -3 dig 2 * dup -3 bury zerofree if -4 dig . then
+  -4 dig 1 + dup -4 bury 30000 > 0 = ] drop
