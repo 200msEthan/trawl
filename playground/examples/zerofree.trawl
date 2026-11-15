@@ -1,0 +1,7 @@
+# Powers of 2 with no 0 among their digits. They get rare fast. Is there a last one?
+# zerofree ( x -- flag ): peel off digits from the bottom until a 0 shows up
+: zerofree 1 swap [ dup 10 % 0 = if swap drop 0 swap 0 * else 10 / then ] drop ;
+1 1 [ drop
+  dup 2 swap power dup zerofree if . ." is 2^" dup . ." and has no 0" 10 emit else drop then
+  1 + dup 300 < ] drop drop
+." Nothing after 2^86, all the way to 2^300. Nobody has proved there are no more."

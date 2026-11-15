@@ -7,8 +7,11 @@ Thanks for wanting to help. Small, careful changes are the most welcome kind.
 ```
 git clone https://github.com/connabyss/trawl && cd trawl
 pip install -e .[test]
-python -m pytest
+python -m pytest          # the quick run, about 30 seconds
+python -m pytest --all    # everything, as CI runs it: a few minutes
 ```
+
+Run `--all` before you open a pull request.
 
 You need Python 3.10 or newer and gcc or clang (the native half of the tests compiles C).
 

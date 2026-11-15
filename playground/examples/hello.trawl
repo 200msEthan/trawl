@@ -1,0 +1,8 @@
+# A first look at Trawl. Numbers go on a stack; words use them up.
+# Every line this prints that starts with a number shows up as a catch.
+: sq dup * ;
+12 sq . ." is 12 squared" 10 emit
+2 100 power . ." is 2 to the 100: numbers never overflow" 10 emit
+1234 10 digsum . ." is the digit sum of 1234" 10 emit
+255 2 digsum . ." is how many 1 bits 255 has" 10 emit
+42 7 bury  7 dig . ." is what cell 7 of the seabed holds" 10 emit

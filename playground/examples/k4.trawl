@@ -1,0 +1,6 @@
+# For each t, build n = 8t^4 - 18t^2 + 6 and test whether ((n+4)!)^2 divides (2n)!
+use quartic_k4
+60 1 [ drop
+  dup cells dup nof judge if ." t = " dup . ." works: n = " dup nof . 10 emit then
+  1 + dup 131 < ] drop drop
+." Done. Every other t in that range fails."

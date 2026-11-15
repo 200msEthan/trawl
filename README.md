@@ -116,7 +116,8 @@ Tide programs from the original research print exactly what the old Tide engine 
 
 ```
 pip install -e .[test]
-python -m pytest
+python -m pytest          # the quick run, about 30 seconds
+python -m pytest --all    # everything, as CI runs it: a few minutes
 ```
 
 The tests run on Linux, macOS and Windows. New here? See [CONTRIBUTING.md](CONTRIBUTING.md)

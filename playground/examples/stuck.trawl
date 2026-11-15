@@ -1,0 +1,3 @@
+# This loop never changes anything, so it can never end.
+# Trawl notices the exact same state coming back and stops with a proof.
+1 [ 5 drop ]
