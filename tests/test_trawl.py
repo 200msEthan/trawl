@@ -1173,9 +1173,9 @@ def test_fuzzer_finds_say_what_the_interpreter_says():
     assert interp(FUZZ[0]) == "0 0 \n"
     assert interp(FUZZ[1]) == "105 105 (1 pearls) \n"
     with pytest.raises(TrawlError, match="power is too big"):
-        interp(FUZZ[8])
+        interp("2 100000000000 power .")
     with pytest.raises(TrawlError, match="echo can look at 16777216 seabed cells at most"):
-        interp(FUZZ[10])
+        interp("0 100000000000 echo .")
 
 
 def test_running_out_of_memory_is_a_plain_error(monkeypatch):
