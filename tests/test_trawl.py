@@ -1160,6 +1160,8 @@ FUZZ = [
     "2 100000000000 power .",
     "-3 10000000000000 power .",
     "0 100000000000 echo .",
+    "-4611686018427387904 4611686018427387903 echo .",  # the span is 2^63: it must not wrap past the limit
+    ": prime prime 1 + ; 7 prime .",  # a deep word with a big frame: "too deep", not a crash (Linux stack)
 ]
 
 

@@ -739,6 +739,8 @@ def build(prog, out_path, file="<program>", opt="-O2", keep_c=None):
             cmd.append("-Wl,--stack,268435456")
         elif sys.platform == "darwin":
             cmd.append("-Wl,-stack_size,0x10000000")
+        else:  # elsewhere the program runs on a thread of its own with a big stack (see trawl_rt.h)
+            cmd.append("-pthread")
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             raise TrawlError("the C compiler refused the generated code (this is a Trawl bug, please report it):\n" + r.stderr[-3000:])

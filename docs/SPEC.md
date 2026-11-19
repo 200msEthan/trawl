@@ -195,7 +195,7 @@ engine can share them out and pick them up again:
   file that isn't a Trawl save file.
 
 **The rule that makes this safe:** a block's changes to the seabed, to pearls, to what
-`echo` remembers and to the words it defines stay in its own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
+`echo` remembers, to the words it defines and to the stack below n stay in its own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
 swept word should set every seabed cell it reads before it reads it. Scratch cells are fine;
 a running total kept in the seabed across calls is not (use the count, or print the finds).
 

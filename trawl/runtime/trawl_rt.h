@@ -960,8 +960,10 @@ static void echo_insert(uint64_t h, V *vals, int64_t len, int64_t when) {
 }
 /* lo hi echo: has the seabed from lo to hi looked exactly like this before? */
 static V rt_echo(V lo, V hi) {
-  int64_t a = rt_addr(lo), b = rt_addr(hi), len = b >= a ? b - a + 1 : 0;
-  if (len > ((int64_t)1 << 24)) rt_die("echo can look at 16777216 seabed cells at most, not %lld", (long long)len);
+  int64_t a = rt_addr(lo), b = rt_addr(hi);
+  uint64_t span = b >= a ? (uint64_t)b - (uint64_t)a + 1 : 0; /* up to 2^63: counted unsigned so it can't wrap */
+  if (span > ((uint64_t)1 << 24)) rt_die("echo can look at 16777216 seabed cells at most, not %llu", (unsigned long long)span);
+  int64_t len = (int64_t)span;
   V *vals = (V *)malloc(sizeof(V) * (size_t)(len ? len : 1));
   uint64_t h = 0x1234567ULL + (uint64_t)len;
   for (int64_t i = 0; i < len; i++) { vals[i] = rt_dig(MKV(a + i)); h = mix64(h ^ v_hash(vals[i])); }
@@ -1376,7 +1378,7 @@ static void rt_args(int argc, char **argv) {
   }
 }
 
-int main(int argc, char **argv) {
+static int rt_main(int argc, char **argv) {
   static char obuf[1 << 16];
   setvbuf(stdout, obuf, _IOFBF, sizeof obuf);
   rt_args(argc, argv);
@@ -1418,4 +1420,25 @@ int main(int argc, char **argv) {
     GC_POLL(0);
   }
 }
+#endif
+
+#if !defined(_WIN32) && !defined(__APPLE__)
+/* Linux gives the main thread only its 8 MB ulimit stack whatever the linker says (Windows and macOS take
+   a flag at build time). A deep word with a big frame overflows that before RT_MAX_DEPTH can stop it, so the
+   program runs on a thread with a 256 MB stack, like the interpreter does. */
+#include <pthread.h>
+typedef struct { int argc; char **argv; int ret; } RtStart;
+static void *rt_start(void *p) { RtStart *a = (RtStart *)p; a->ret = rt_main(a->argc, a->argv); return NULL; }
+int main(int argc, char **argv) {
+  RtStart a = { argc, argv, 0 };
+  pthread_attr_t at; pthread_t t;
+  if (!pthread_attr_init(&at) && !pthread_attr_setstacksize(&at, (size_t)256 << 20) &&
+      !pthread_create(&t, &at, rt_start, &a)) {
+    pthread_join(t, NULL);
+    return a.ret;
+  }
+  return rt_main(argc, argv);
+}
+#else
+int main(int argc, char **argv) { return rt_main(argc, argv); }
 #endif
