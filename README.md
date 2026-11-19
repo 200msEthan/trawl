@@ -165,7 +165,7 @@ exactly what the program printed (`TRAWL_PROGRESS=0` turns it off).
 
 ```
 pip install -e .[test]
-python -m pytest          # the quick run, about a minute
+python -m pytest          # the quick run, about two minutes
 python -m pytest --all    # everything, as CI runs it: a few minutes
 ```
 

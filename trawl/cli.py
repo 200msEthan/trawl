@@ -76,12 +76,42 @@ def check_kind(path, flag, ok, what):
                              "pick a new file name")
 
 
+def child_code(code):
+    """The exit code to pass on from the native program: a reader that stopped early (`| head`) is fine, as on
+    `trawl run`, and a signal becomes the shell's 128 + its number instead of a wrapped negative."""
+    import signal
+    if code < 0:
+        return 0 if -code == getattr(signal, "SIGPIPE", -1) else 128 - code
+    return code
+
+
+def is_receipt(path):
+    from .receipt import read_receipt
+    try:
+        read_receipt(path)
+        return True
+    except TrawlError:
+        return False
+
+
 def check_receipt(path):
-    check_kind(path, "--receipt", lambda h: h.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"{"), "a Trawl receipt")
+    if path and os.path.isfile(path) and os.path.getsize(path) and not is_receipt(path):
+        raise TrawlError(f"`--receipt {path}`: that file isn't a Trawl receipt, and this would write over it. "
+                         "pick a new file name")
+
+
+TRAWL_MARK = b"made by the Trawl compiler"  # in every program Trawl builds (see rt_usage in trawl_rt.h)
 
 
 def check_exe(path, flag="-o"):
-    check_kind(path, flag, lambda h: h.startswith(EXE_MAGIC), "a program Trawl built")
+    """-o may replace a program Trawl built, never another program (or anything else)."""
+    if path and os.path.isfile(path) and os.path.getsize(path):
+        with open(path, "rb") as fh:
+            data = fh.read(64 << 20)
+        # older Trawl builds carry no mark, but they do carry their save-file header
+        if not (data.startswith(EXE_MAGIC) and (TRAWL_MARK in data or b"trawl-save " in data)):
+            raise TrawlError(f"`{flag} {path}`: that file isn't a program Trawl built, and this would write over "
+                             "it. pick a new file name")
 
 
 def check_c(path):
@@ -195,18 +225,18 @@ def cmd_fast(args):
         ticker = Ticker()
         if not args.receipt:
             if not ticker.enabled:
-                sys.exit(subprocess.call([exe] + extra))
+                sys.exit(child_code(subprocess.call([exe] + extra)))
             with ticker:
                 code, _ = run_native_teed([exe] + extra, ticker=ticker, keep=False)
             if code == 0:
                 ticker.done()
-            sys.exit(code)
+            sys.exit(child_code(code))
         t0 = time.time()
         with ticker:
             code, output = run_native_teed([exe] + extra, ticker=ticker if ticker.enabled else None)
         if code != 0:
             print("~ no receipt: the run stopped with an error", file=sys.stderr)
-            sys.exit(code)
+            sys.exit(child_code(code) or 1)
         write_receipt(args.receipt, files=files, main=main, engine="fast", output=output, seconds=time.time() - t0,
                       jobs=args.jobs, save=args.save)
         ticker.done()

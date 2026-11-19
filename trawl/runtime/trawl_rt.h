@@ -807,7 +807,7 @@ static void rt_grow(long need) {
 #define ENSURE(n) do { if (UNLIKELY((long)(n) > CAP)) rt_grow((long)(n)); } while (0)
 
 static void rt_underflow(const char *word, int want) {
-  rt_die("the tide went out too far: `%s` wanted %d number%s, the shore was empty", word, want, want > 1 ? "s" : "");
+  rt_die("the tide went out too far: `%s` wanted %d number%s, but the shore ran out", word, want, want > 1 ? "s" : "");
 }
 
 static void rt_dots(long sp) {
@@ -1062,6 +1062,7 @@ static SaveRec *saved = NULL; static long saved_n = 0, saved_pos = 0;
 static FILE *save_fh = NULL;
 
 static void rt_sweep_shape(const char *name, int64_t n, long got) {
+  if (got < 0) got = 0; /* it ate numbers below n too: it still left none in n's place */
   rt_die("`sweep %s` wants `%s` to turn each n into one answer, but at n = %lld it left %ld number%s in its place",
          name, name, (long long)n, got, got == 1 ? "" : "s");
 }
@@ -1351,7 +1352,7 @@ static long trawl_main(long sp);
 static void trawl_init_consts(void);
 
 static void rt_usage(void) {
-  fputs("usage: this program [--jobs N] [--save FILE]\n"
+  fputs("usage: this program [--jobs N] [--save FILE]   (made by the Trawl compiler)\n"
         "  --jobs N    run each top-level `sweep` on N cores (0 = all of them); output stays in order\n"
         "  --save FILE keep finished sweep blocks in FILE; run again with the same FILE to resume\n", stderr);
 }

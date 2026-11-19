@@ -25,7 +25,7 @@ scans the whole slice. One core each, Linux, gcc 13 at `-O2`, Python 3.13, Intel
 
 | Program | Time | vs Trawl |
 |---|---|---|
-| Hand-written C (the research tool, `e727.c`) | 2.6 s | 3x faster |
+| Hand-written C (the research tool, [a343507.c](../benchmarks/vs/a343507.c)) | 2.6 s | 3x faster |
 | **Trawl, native** (`trawl build`) | **7.7 s** | |
 | The same algorithm in plain Python ([a343507.py](../benchmarks/a343507.py)) | 60 s | 8x slower |
 | The same Trawl program on the original Tide engine | 1321 s (22 min) | 170x slower |

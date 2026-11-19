@@ -127,7 +127,7 @@ def find_lib(name, search, flat=False):
     return None
 
 
-def expand(toks, search, depth=0, used=None, flat=False):
+def expand(toks, search, depth=0, used=None, flat=False, chain=()):
     """Replace every `use name` with the tokens of name.trawl (or name.tide).
     `used`, if given, collects the path of every library file read."""
     out, i = [], 0
@@ -140,12 +140,13 @@ def expand(toks, search, depth=0, used=None, flat=False):
             path = find_lib(name, search, flat)
             if path is None:
                 raise TrawlError(f"{where(t)}: no library called `{name}` (looked for {name}.trawl and {name}.tide)")
-            if depth > 50:
-                raise TrawlError(f"{where(t)}: libraries keep using each other in a circle")
+            if os.path.abspath(path) in chain or depth > 50:  # the `use` that closes the circle is named
+                names = [os.path.basename(c) for c in chain] + [os.path.basename(path)]
+                raise TrawlError(f"{where(t)}: libraries keep using each other in a circle ({' -> '.join(names)})")
             here = [os.path.dirname(os.path.abspath(path))] + search
             if used is not None and path not in used:
                 used.append(path)
-            out += expand(tokens(read_source(path), path), here, depth + 1, used, flat)
+            out += expand(tokens(read_source(path), path), here, depth + 1, used, flat, chain + (os.path.abspath(path),))
             i += 2
         else:
             out.append(t)
