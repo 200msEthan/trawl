@@ -420,8 +420,8 @@ def uses_worlds(prog):
 # Words calling words nest Python calls, and Python's default limit (1000 frames) stopped
 # `trawl run` near 330 levels while `trawl fast` went millions deep. So a run gets its own
 # thread with a big stack and a high frame limit; past that, a plain `~` error, not a traceback.
-DEEP_FRAMES = 200_000
-_DEEP_STACK = 256 * 1024 * 1024  # the most Windows allows a thread
+DEEP_FRAMES = 100_000
+_DEEP_STACK = 255 * 1024 * 1024  # Windows wants a thread's stack below 256 MB
 
 
 def _deep(fn):

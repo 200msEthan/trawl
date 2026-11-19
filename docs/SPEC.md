@@ -232,7 +232,7 @@ They also differ in a few edges that don't change any correct program's output:
 - Output is printed as the program runs (the interpreter in worlds mode collects it).
 - Unknown words are reported before the program starts, not when they are reached.
 - Seabed addresses must be smaller than 2^62 in size.
-- Words calling words: the interpreter goes about 50,000 levels deep and then stops with
+- Words calling words: the interpreter goes about 25,000 levels deep and then stops with
   `the sea got too deep`; the native build goes much deeper, and a word that calls itself
   forever without growing the stack just runs forever there.
 
