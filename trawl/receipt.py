@@ -242,6 +242,9 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
         engine = "run"
         if sample < 1:
             raise TrawlError("--save needs --sample N: how many blocks of each sweep to re-run")
+    elif sample or seed is not None:
+        raise TrawlError("--sample and --seed only work with --save FILE. without a save file, "
+                         "verify re-runs the whole program")
     if engine is None:
         engine = "run" if r["engine"] == "fast" else "fast"
     with tempfile.TemporaryDirectory() as tmp:
@@ -305,8 +308,9 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
         say(f"{'✓' if ok else '✗'} re-ran on {how} in {took:.1f} s: same output, "
             f"{len(got)} bytes, {lines} lines (sha256 {want[:16]})")
     else:
-        say(f"✗ re-ran on {how} in {took:.1f} s: the output is different "
-            f"({len(got)} bytes, the receipt says {r['output']['bytes']})")
+        size = (f"{len(got)} bytes, the receipt says {r['output']['bytes']}" if len(got) != r['output']['bytes']
+                else f"the same size, {len(got)} bytes, but different bytes")
+        say(f"✗ re-ran on {how} in {took:.1f} s: the output is different ({size})")
         head = r["output"]["head"].encode("utf-8")
         if got[:len(head)] != head:
             say("  " + first_difference(head, got[:len(head)]))

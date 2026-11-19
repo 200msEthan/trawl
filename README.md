@@ -26,7 +26,7 @@ $ trawl run rivers.trawl
 ```
 
 `trawl fast rivers.trawl` prints the same thing, compiled to machine code first.
-Or skip the install: download [playground/index.html](playground/index.html) and open it in a browser. It runs Trawl right in the page.
+Or skip the install: download [playground/index.html](playground/index.html) and open it in a browser. It runs Trawl right in the page (it fetches Python for the browser, Pyodide, the first time, so it needs the internet).
 You need Python 3.10 or newer, and gcc or clang for `trawl fast` and `trawl build`
 (on Windows: [w64devkit](https://github.com/skeeto/w64devkit) or MSYS2). Typing `trawl`
 alone opens an interactive prompt.
@@ -55,12 +55,13 @@ approved them on November 15, 2026: see [A343507](https://oeis.org/A343507).
 
 Trawl is Tide grown into a real language: a written spec, a test suite, a standard library
 and a native compiler. The search in [examples/a343507.trawl](examples/a343507.trawl) finds
-a(10) and a(11) on its own. The open problem itself is in
+a(10) and a(11) on its own: add `10 2935782889 19300000000 search .` at its bottom and run it with
+`trawl fast` (about 8 minutes on one core). The open problem itself is in
 [examples/erdos727](examples/erdos727): Johan Land's k = 3 family and a k = 4 family found by
 a research Claude (a lead, not a proof). On the same slice of the search, it runs about 3 times slower
 than the hand-written C, 8 times faster than plain Python, and 170 times faster than the
-original Tide engine ([docs/BENCHMARK.md](docs/BENCHMARK.md)). Every old Tide program
-still runs and prints exactly what it printed before.
+original Tide engine ([docs/BENCHMARK.md](docs/BENCHMARK.md)). The 97 old Tide programs in the test suite
+still run and print exactly what they printed before.
 
 **More finds, reproduced in Trawl.** [examples/a398813.trawl](examples/a398813.trawl) finds
 the terms of [A398813](https://oeis.org/A398813) with the `factorings` built-in, then checks
@@ -68,7 +69,8 @@ every candidate up to 2^31·3^14·5^12 = 2507653251072000000000000 on all cores:
 smallest number that takes 7 steps to reach 1 (that a(7) is submitted and waiting for an OEIS
 editor's review). [examples/spiral_packing.trawl](examples/spiral_packing.trawl) computes
 the greedy packing coloring of the grid in spiral order (A402223, a new sequence submitted
-to the OEIS and waiting for an editor's review), and the cells where each new largest value first appears, up to 32 at cell 3355518. Add
+to the OEIS and waiting for an editor's review), and the cells where each new largest value first appears, up to 32 at cell 3355518. Run both with
+`trawl fast`: they are too long for the interpreter's step limit. Add
 `--receipt FILE` to either run and anyone can check it with `trawl verify`.
 
 **Who made it.** Trawl was designed and written by Claude agents (Anthropic's AI), directed
@@ -85,7 +87,7 @@ Numbers go on a stack; words take from it and give back.
 2 100 power .          # 1267650600228229401496703205376 (never overflows)
 1234 10 digsum .       # 10, the digit sum in base 10
 1234 10 altsum .       # 2,  units - tens + hundreds - ...
-600851475143 spf .     # 71, the smallest prime factor (fast, even for 25-digit numbers)
+600851475143 spf .     # 71, the smallest prime factor (built in, fast up to about 30 digits)
 12 factorings .        # 4: 12 = 2*6 = 3*4 = 2*2*3, products in any order counted once
 42 7 bury  7 dig .     # 42: the seabed is memory with numbered cells
 5 [ dup . 1 - ] drop   # 5 4 3 2 1: a loop runs while the top is nonzero
@@ -95,13 +97,13 @@ The words that make Trawl what it is:
 
 | | |
 |---|---|
-| **stuck loops** | `trawl run` stops any loop that comes back to exactly the same state, with proof that it would never end, instead of hanging |
+| **stuck loops** | `trawl run` stops a loop that comes back to exactly the same state (stack, memory and all, while that is at most 256 numbers), with proof that it would never end, instead of hanging. Bigger or never-repeating loops hit the step limit instead; `trawl fast` skips the check |
 | `echo` | `lo hi echo` asks: have seabed cells lo..hi looked exactly like this before? It gives how many looks ago (the loop length), or 0 |
 | `wave` `want` `more` `aim` | `1 9 wave` guesses a number; `want` rewinds to try the next guess when a condition fails; `more` collects every answer; `aim` keeps the best |
 | `pearl` | `pearl fib` makes a word remember its answers |
 | `digsum` `altsum` | digit sums in any base |
 | `sweep` | `1 1000000 sweep good?` runs `good?` on every n and counts the hits. Built programs share it out with `--jobs 8` (same output, in order) and pick a stopped run back up with `--save run.sav` |
-| `prime` `spf` | primality and the smallest prime factor, built in and fast: they make the Erdős 727 search 14 times faster than PARI/GP's `factor()` ([benchmarks/vs](benchmarks/vs)) |
+| `prime` `spf` | primality and the smallest prime factor, built in and fast: with them the Erdős 727 k = 4 search runs 14 times faster than the same search in PARI/GP, which uses its general `factor()` ([benchmarks/vs](benchmarks/vs); different tools, same 157 answers) |
 | `factorings` | how many ways a number factors, order ignored (OEIS A001055), exact at any size |
 
 ```
@@ -123,8 +125,8 @@ it adds) in [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
   is always the same as the interpreter's. Seabed cells at fixed addresses (the usual way to
   keep variables) live in CPU registers inside loops.
 
-The test suite checks that both engines print exactly the same thing, and that all 160
-Tide programs from the original research print exactly what the old Tide engine printed.
+The test suite checks that both engines print exactly the same thing, and that all 97
+Tide programs kept from the original research print exactly what the old Tide engine printed.
 
 ## Receipts: check a result without trusting the run
 

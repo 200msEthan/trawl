@@ -58,7 +58,7 @@ effects are written `( before -- after )`, top of the stack on the right.
 | `/ %` | `( a b -- floor(a/b) )`, `( a b -- a mod b )` |
 | `= < >` | `( a b -- flag )` |
 | `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1) |
-| `prime` | `( n -- flag )` 1 if `n` is prime, else 0 (0 for `n < 2`). Exact below 3.3·10^24 (strong probable-prime tests to the first 13 primes, which no composite below that passes). Above it, it is a probable-prime test: right for any number you're likely to meet, but a composite built on purpose to fool those 13 tests would pass |
+| `prime` | `( n -- flag )` 1 if `n` is prime, else 0 (0 for `n < 2`). Exact below 3317044064679887385961981 ≈ 3.3·10^24 (strong probable-prime tests to the first 13 primes, which no composite below that passes; that number is the first one that does). From there up it tests to the first 20 primes, so that number is caught, but it is a probable-prime test: right for any number you're likely to meet, though a composite built on purpose to fool all 20 tests would pass |
 | `spf` | `( n -- p )` the smallest prime factor of `n` (`n >= 2`; `n` itself when `n` is prime, by the same test as `prime`). Fast up to about 10^30; a number whose two smallest prime factors both have 20 or more digits can take a very long time |
 | `factorings` | `( n -- count )` how many ways `n` is a product of whole numbers above 1, order ignored (OEIS A001055; `n >= 1`, and `1 factorings` is 1). `12 factorings` is 4: 12, 2·6, 3·4, 2·2·3. It factors `n` (as `spf` does) and counts from the exponents alone, remembering every exponent pattern it has counted. Exact for any size; slow when `n` has many distinct prime factors with large exponents |
 
@@ -68,8 +68,8 @@ These are Trawl's own words, the ones the research ran on.
 
 | Word | Effect | |
 |---|---|---|
-| `digsum` | `( x base -- s )` | sum of the digits of `abs(x)` in `base` (`base >= 2`). Always matches `x` mod `base - 1`. |
-| `altsum` | `( x base -- s )` | units - tens + hundreds - ... of `abs(x)`. Always matches `x` mod `base + 1`. |
+| `digsum` | `( x base -- s )` | sum of the digits of `abs(x)` in `base` (`base >= 2`). Always matches `abs(x)` mod `base - 1`. |
+| `altsum` | `( x base -- s )` | units - tens + hundreds - ... of `abs(x)`. Always matches `abs(x)` mod `base + 1`. |
 
 `1234 10 digsum` is 10. `1234 10 altsum` is 2. `255 2 digsum` is 8 (the number of 1 bits).
 
@@ -211,15 +211,19 @@ language and the same in both engines, for example:
 - `nobody in the sea knows the word `flod`. did you mean `fold`?`
 - `` `sweep two` wants `two` to turn each n into one answer, but at n = 1 it left 2 numbers in its place``
 - `the tide is stuck: this loop came back to the exact same sea [...], so it can never end` (interpreter only, see below)
+- `the sea got too deep: words called inside words too many levels down. does a word call itself forever?` (interpreter only, see below)
 
 ## 15. The two engines
 
 **`trawl run`** (reference interpreter, Python) checks two extra things:
 
-- **Stuck loops.** Trawl is deterministic, so a loop that comes back to the exact same stack
-  and seabed will repeat forever. The interpreter remembers what the sea looked like at the
-  top of each pass (while stack plus seabed hold at most 256 numbers) and stops with a
-  proof when a picture repeats.
+- **Stuck loops.** Trawl is deterministic, so a loop that comes back to the exact same sea
+  will repeat forever. The interpreter remembers what the sea looked like at the top of each
+  pass and stops with a proof when a picture repeats. The picture is everything a pass can
+  see: the stack, the seabed, the words defined, what `echo` remembers and where `wave` is
+  on its guesses. It is only taken while stack, seabed and `echo`'s memory hold at most 256
+  numbers between them; a bigger sea, or a loop that never repeats exactly (one that calls
+  `echo` or `wave` each pass never does), runs until the step limit stops it.
 - **A step limit** (50 million by default; `--max-steps N`).
 
 **`trawl fast` / `trawl build`** (native compiler, through C) skip both checks, for speed.
@@ -227,9 +231,12 @@ They also differ in a few edges that don't change any correct program's output:
 
 - Output is printed as the program runs (the interpreter in worlds mode collects it).
 - Unknown words are reported before the program starts, not when they are reached.
-- Definitions are resolved where a word is used in the text. A word used at the top level
-  before any definition of it is an error when reached, as in the interpreter.
 - Seabed addresses must be smaller than 2^62 in size.
+- Words calling words: the interpreter goes about 50,000 levels deep and then stops with
+  `the sea got too deep`; the native build goes much deeper, and a word that calls itself
+  forever without growing the stack just runs forever there.
 
-Everything else (results, printed text, error messages) is the same, and the test suite
+Without the two checks, a stuck loop or a runaway word makes a native build run forever, so
+try a new program on `trawl run` first. Everything else (results, printed text, error
+messages) is the same, and the test suite
 checks that on every example and every old Tide program.

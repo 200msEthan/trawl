@@ -190,6 +190,8 @@ class Parser:
                 raise TrawlError(f"{where(t)}: a stray `{s}` with nothing open for it to close")
             elif s.startswith('."') and len(s) >= 3 and s.endswith('"'):
                 body.append(Text(s[2:-1].lstrip(), t))
+            elif s.startswith('."'):
+                raise TrawlError(f"{where(t)}: this `.\"` text never closes. end it with a `\"` on the same line")
             elif NUMBER.match(s):
                 body.append(Num(int(s), t))
             else:

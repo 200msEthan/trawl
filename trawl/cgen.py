@@ -174,6 +174,12 @@ class Gen:
         self.by_name = {}
         for i, d in enumerate(prog.defs):
             self.by_name.setdefault(d.name, []).append(i)
+        self.def_index = {id(d): i for i, d in enumerate(prog.defs)}
+        # Words defined more than once with different bodies. The interpreter calls whichever
+        # meaning is in force when the call happens, so the compiled code keeps a "current
+        # meaning" number for each of them, set where each definition is reached.
+        self.varied = {name for name, idxs in self.by_name.items()
+                       if len({self.shape(prog.defs[i].body) for i in idxs}) > 1}
         self.pearl_ids = {}
         self.worlds = False
         self.def_seen = 0
@@ -196,13 +202,12 @@ class Gen:
         idxs = self.by_name.get(name)
         if not idxs:
             return None
-        bodies = {self.shape(self.prog.defs[i].body) for i in idxs}
-        if len(bodies) == 1:
-            return idxs[-1]
         before = [i for i in idxs if i < at]
-        if before:
-            return before[-1]
-        return None if top_level else idxs[0]
+        if top_level:  # the top level runs in order: only definitions above it exist yet
+            return before[-1] if before else None
+        if name not in self.varied:
+            return idxs[-1]
+        return before[-1] if before else idxs[0]
 
     def shape(self, body):
         out = []
@@ -239,6 +244,9 @@ class Gen:
             for node in body:
                 size += 1
                 if isinstance(node, (Word, Sweep)):
+                    if isinstance(node, Word) and node.name in self.varied:
+                        calls[i].update(self.by_name[node.name])
+                        continue
                     j = self.resolve(node.name, i + 1, False)
                     if j is not None:
                         calls[i].add(j)
@@ -276,7 +284,7 @@ class Gen:
         order = sorted(range(n), key=lambda i: len(calls[i]))
         for _ in range(3):  # leaves first, then words built from them
             for i in order:
-                if self.inline[i] or not plain[i] or self.prog.defs[i].name in self.pearl_names or self.prog.defs[i].name in self.sweep_names or reaches(i):
+                if self.inline[i] or not plain[i] or self.prog.defs[i].name in self.varied or self.prog.defs[i].name in self.pearl_names or self.prog.defs[i].name in self.sweep_names or reaches(i):
                     continue
                 total.clear()
                 if expanded(i) <= 80:
@@ -291,10 +299,15 @@ class Gen:
                 if isinstance(n, Def) and top:
                     at += 1
                 elif isinstance(n, (Word, Sweep)):
-                    j = self.resolve(n.name, at, top)
-                    if j is not None and j not in seen:
-                        seen.add(j)
-                        todo.append(j)
+                    if isinstance(n, Word) and n.name in self.varied and not top:
+                        js = self.by_name[n.name]  # any meaning may be the one in force
+                    else:
+                        j = self.resolve(n.name, at, top)
+                        js = [] if j is None else [j]
+                    for j in js:
+                        if j not in seen:
+                            seen.add(j)
+                            todo.append(j)
                 elif isinstance(n, Loop):
                     at = walk(n.body, at, top)
                 elif isinstance(n, If):
@@ -320,6 +333,8 @@ class Gen:
             elif k is Def:
                 if top_level:
                     self.def_seen += 1
+                if node.name in self.varied:
+                    f.emit(f"cur{self.by_name[node.name][0]} = {self.def_index[id(node)]};")
             elif k is PearlDecl:
                 pid = self.pearl_ids.setdefault(node.name, len(self.pearl_ids))
                 f.emit(f"shells[{pid}].on = 1;")
@@ -412,6 +427,25 @@ class Gen:
         f.reload()
         f.known = 0
 
+    def dispatch(self, f, node):
+        """Call a word that has several meanings: the one in force right now."""
+        t = node.name
+        f.flush()
+        f.spill()
+        f.emit(f"switch (cur{self.by_name[t][0]}) {{")
+        for i in self.by_name[t]:
+            fn = self.fn_name(i)
+            if t in self.pearl_names:
+                pid = self.pearl_ids.setdefault(t, len(self.pearl_ids))
+                f.emit(f"case {i}: sp = rt_call_pearl({pid}, {fn}, {c_string(t)}, sp); break;")
+            else:
+                f.emit(f"case {i}: sp = {fn}(sp); break;")
+        msg = f"{where(node.tok)}: nobody in the sea knows the word `{t}`."
+        f.emit(f"default: rt_die(\"%s\", {c_string(msg)});")
+        f.emit("}")
+        f.reload()
+        f.known = 0
+
     def sweep(self, f, node, at, top_level):
         t = node.name
         target = self.resolve(t, at, top_level)
@@ -429,13 +463,17 @@ class Gen:
 
     def word(self, f, node, at, top_level):
         t = node.name
+        if t in self.varied and not top_level:
+            self.dispatch(f, node)
+            return
         target = self.resolve(t, at, top_level)
         if t in YOURS_WINS and top_level and target is not None and target >= at:
             target = None  # the program's own word isn't defined yet: the built-in answers, as in the interpreter
         if target is None and t in self.by_name and t not in YOURS_WINS:
             # used at the top level before any definition: the sea doesn't know it yet
             f.flush()
-            msg = f"{where(node.tok)}: nobody in the sea knows the word `{t}` yet (it is defined further down)"
+            known = {d.name for d in self.prog.defs[:at]}  # what the interpreter knows by now
+            msg = f"{where(node.tok)}: nobody in the sea knows the word `{t}`.{suggest(t, known)}"
             f.emit(f"rt_die(\"%s\", {c_string(msg)});")
             return
         if target is not None:
@@ -588,6 +626,8 @@ class Gen:
             funcs.append((self.fn_name(i), f.lines))
         self.def_seen = 0
         main = Fn(self)
+        for name in sorted(self.varied):
+            main.emit(f"cur{self.by_name[name][0]} = -1;")  # every world starts before any definition
         self.body(main, self.prog.body, 0, True)
         main.flush()
         main.emit("return sp;")
@@ -599,6 +639,7 @@ class Gen:
                f"#define N_PEARL_WORDS {max(1, len(self.pearl_ids))}",
                '#include "trawl_rt.h"',
                f"static V K[{max(1, len(self.consts))}];"]
+        out += [f"static int cur{self.by_name[name][0]} = -1;" for name in sorted(self.varied)]
         out += [f"static long {name}(long sp);" for name, _ in funcs]
         for name, lines in funcs:
             out.append(f"static long {name}(long sp) {{")

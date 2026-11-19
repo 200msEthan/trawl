@@ -99,9 +99,13 @@ class Sea:
         st = self.stack
         while st and st[-1] != 0:
             # The sea is deterministic: if a loop comes back to the exact same stack and
-            # seabed, it will repeat forever. Proof, not a guess.
-            if len(st) + len(self.bed) <= 256:
-                sea = (tuple(st), len(self.words), tuple(sorted(self.bed.items())))
+            # seabed, it will repeat forever. Proof, not a guess. The picture holds
+            # everything a pass can see: `echo` remembers past looks and `wave` reads the
+            # guess tape, so both go in too (a loop that calls them never repeats a picture,
+            # and the step limit stops it instead of a wrong proof).
+            if len(st) + len(self.bed) + len(self.echoes) <= 256:
+                sea = (tuple(st), len(self.words), tuple(sorted(self.bed.items())),
+                       self.echo_n, tuple(sorted(self.echoes.items())), self.pos)
                 if sea in seen:
                     raise TrawlError(f"the tide is stuck: this loop came back to the exact same sea {list(st)}, so it can never end")
                 if len(seen) < 50_000:
@@ -191,6 +195,8 @@ class Sea:
             c = self.pop(t)
             if not 0 <= c <= 0x10FFFF:
                 raise TrawlError(f"emit wants a character number from 0 to 1114111, not {c}")
+            if 0xD800 <= c <= 0xDFFF:
+                raise TrawlError(f"emit can't print {c}: 55296 to 57343 are not characters (they are halves of UTF-16 pairs)")
             self.say(chr(c))
         elif t == ".s":
             self.say("<" + " ".join(map(str, st)) + "> ")
@@ -265,6 +271,10 @@ class Sea:
 # two engines always agree. `spf` finds the smallest prime factor with trial division, then
 # Pollard-Brent rho.
 _BASES = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41)
+# 3317044064679887385961981 is the smallest composite that passes all 13 (it is also where the
+# exact range ends). From there up, seven more bases, so that number and its kind are caught.
+_EXACT_BELOW = 3317044064679887385961981
+_MORE_BASES = _BASES + (43, 47, 53, 59, 61, 67, 71)
 
 
 def is_prime(n):
@@ -277,7 +287,7 @@ def is_prime(n):
     while d % 2 == 0:
         d //= 2
         s += 1
-    for a in _BASES:
+    for a in (_BASES if n < _EXACT_BELOW else _MORE_BASES):
         x = pow(a, d, n)
         if x == 1 or x == n - 1:
             continue
@@ -407,8 +417,61 @@ def uses_worlds(prog):
     return walk(prog.body)
 
 
+# Words calling words nest Python calls, and Python's default limit (1000 frames) stopped
+# `trawl run` near 330 levels while `trawl fast` went millions deep. So a run gets its own
+# thread with a big stack and a high frame limit; past that, a plain `~` error, not a traceback.
+DEEP_FRAMES = 200_000
+_DEEP_STACK = 512 * 1024 * 1024
+
+
+def _deep(fn):
+    import threading
+    if getattr(_deep, "inside", False):
+        return fn()
+    box = {}
+
+    def work():  # only this thread has the big stack, so only it gets the high frame limit
+        _deep.inside, limit = True, sys.getrecursionlimit()
+        sys.setrecursionlimit(max(limit, DEEP_FRAMES))
+        try:
+            box["value"] = fn()
+        except BaseException as e:  # carried back to the caller's thread
+            box["error"] = e
+        finally:
+            _deep.inside = False
+            sys.setrecursionlimit(limit)
+    try:
+        old = threading.stack_size(_DEEP_STACK)
+    except (ValueError, RuntimeError):  # no big stacks here: run as is
+        return fn()
+    try:
+        t = threading.Thread(target=work, daemon=True)
+        t.start()
+    except RuntimeError:  # no threads at all (the playground, in the browser): run as is
+        return fn()
+    finally:
+        threading.stack_size(old)
+    while t.is_alive():
+        t.join(0.2)  # a short wait, so Ctrl+C still reaches the main thread
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
+
+
+def _too_deep(fn):
+    try:
+        return fn()
+    except RecursionError:
+        raise TrawlError("the sea got too deep: words called inside words too many levels down. "
+                         "does a word call itself forever?") from None
+
+
 def run(prog, max_steps=50_000_000, max_worlds=2_000_000, stream=None, plan=None):
     """Run a parsed program. Returns (printed text, worlds sunk or None)."""
+    return _deep(lambda: _too_deep(lambda: _run(prog, max_steps, max_worlds, stream, plan)))
+
+
+def _run(prog, max_steps, max_worlds, stream, plan):
     if not uses_worlds(prog):
         sea = Sea(max_steps=max_steps, stream=stream)
         sea.plan = plan

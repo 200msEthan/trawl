@@ -387,7 +387,9 @@ static V v_digits(V x, V b, int alternate) {
  * prime: strong probable-prime tests to the 13 prime bases 2..41 (exact below 3.3e24), the
  * same tests as the interpreter. spf: trial division, then Pollard-Brent rho. Numbers that
  * fit in 62 bits take a fast path with 128-bit products. */
-static const int PRIME_BASES[13] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41};
+static const int PRIME_BASES[20] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41,
+                                    43, 47, 53, 59, 61, 67, 71}; /* the last 7: from 3317044064679887385961981 up */
+#define PRIME_EXACT_BELOW ((u128)3317044064ULL * 1000000000000000ULL + 679887385961981ULL)
 
 static inline uint64_t u_mulmod(uint64_t a, uint64_t b, uint64_t m) { return (uint64_t)((unsigned __int128)a * b % m); }
 static uint64_t u_powmod(uint64_t a, uint64_t e, uint64_t m) {
@@ -479,7 +481,8 @@ static int w_isprime(u128 n) { /* n odd, has no prime factor below 1000, n < 2^1
   u128 d = n - 1; int s = 0;
   while (!(d & 1)) { d >>= 1; s++; }
   u128 minus1 = M.n - M.one;
-  for (int i = 0; i < 13; i++) {
+  int nb = n < PRIME_EXACT_BELOW ? 13 : 20;
+  for (int i = 0; i < nb; i++) {
     u128 x = m_pow(&M, m_to(&M, (u128)PRIME_BASES[i]), d);
     if (x == M.one || x == minus1) continue;
     int ok = 0;
@@ -548,7 +551,7 @@ static int big_isprime(V n) {
   u128 w; if (v_to_w(n, &w)) return w_isprime(w);
   V nm1 = v_sub(n, MKV(1)), d = nm1; int s = 0;
   for (;;) { V q, r; big_divmod(d, MKV(2), &q, &r); if (r != 0) break; d = q; s++; }
-  for (int i = 0; i < 13; i++) {
+  for (int i = 0; i < 20; i++) { /* above 2^127, so past the exact range: all 20 bases */
     V x = v_powmod(MKV(PRIME_BASES[i]), d, n);
     if (x == MKV(1) || v_cmp(x, nm1) == 0) continue;
     int ok = 0;
@@ -751,6 +754,8 @@ static void rt_emit(V v) {
     rt_die("emit wants a character number from 0 to 1114111, not %s", s);
   }
   uint32_t c = (uint32_t)SMALLN(v); char u[4]; size_t n;
+  if (c >= 0xD800 && c <= 0xDFFF)
+    rt_die("emit can't print %lu: 55296 to 57343 are not characters (they are halves of UTF-16 pairs)", (unsigned long)c);
   if (c < 0x80) { u[0] = (char)c; n = 1; }
   else if (c < 0x800) { u[0] = (char)(0xC0 | (c >> 6)); u[1] = (char)(0x80 | (c & 63)); n = 2; }
   else if (c < 0x10000) { u[0] = (char)(0xE0 | (c >> 12)); u[1] = (char)(0x80 | ((c >> 6) & 63)); u[2] = (char)(0x80 | (c & 63)); n = 3; }

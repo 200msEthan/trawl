@@ -219,6 +219,73 @@ def test_native_stops_a_runaway_stack(native):
     assert "the stack grew past" in native("1 [ 1 ]", expect_error=True)
 
 
+# A loop that calls `echo` looks the same at the top of each pass, but echo remembers the
+# last pass, so the next one can end it. The stuck proof must not fire on it (it did: cold read).
+@pytest.mark.parametrize("src,want", [
+    ("7 5 bury 1 [ drop 5 5 echo 0 = ] 99 .", "99 "),
+])
+def test_stuck_proof_sees_what_the_loop_sees(engine, src, want):
+    assert engine(src).splitlines()[0] == want
+
+
+def test_stuck_proof_still_fires_after_hush():
+    with pytest.raises(TrawlError, match="the tide is stuck"):
+        interp("1 [ hush 0 0 echo drop ]")
+
+
+# Words calling words: the interpreter stopped near 330 levels with a Python traceback.
+def test_deep_words_on_both_engines(engine):
+    assert engine(": down dup 0 > if 1 - down then ; 20000 down .") == "0 \n"
+
+
+def test_runaway_word_is_a_plain_error():
+    with pytest.raises(TrawlError, match="the sea got too deep"):
+        interp(": f f ; 3 f .")
+
+
+# A word defined again: from then on the new meaning is used, also inside words defined
+# before it (SPEC 8). The compiler used the meaning in force where the caller was written.
+@pytest.mark.parametrize("src,want", [
+    (': greet ." hello" ; : hi greet ; : greet ." bye" ; hi', "bye"),
+    (": a 1 . ; : b a ; b : a 2 . ; b : a 3 . ; b", "1 2 3 "),
+    (": a 1 . ; : b a ; : a 2 . ; : c b ; c", "2 "),
+])
+def test_redefined_word_means_the_newest_meaning(engine, src, want):
+    assert engine(src).splitlines()[0] == want
+
+
+def test_word_used_before_its_definition(engine):
+    src = 'y\n: y ." three" ;'
+    want = "nobody in the sea knows the word `y`."
+    if engine is interp:
+        with pytest.raises(TrawlError, match=re.escape(want)):
+            interp(src)
+    else:
+        assert want in engine(src, expect_error=True)
+
+
+def test_emit_refuses_surrogates(engine):
+    want = "emit can't print 55296"
+    if engine is interp:
+        with pytest.raises(TrawlError, match=want):
+            interp("55296 emit")
+    else:
+        assert want in engine("55296 emit", expect_error=True)
+
+
+# 3317044064679887385961981 = 1287836182261 * 2575672364521 fools the 13 bases 2..41.
+def test_prime_is_not_fooled_by_the_first_13_base_pseudoprime(engine):
+    n = 3317044064679887385961981
+    assert engine(f"{n} prime . {n} spf . {n} factorings . 170141183460469231731687303715884105727 prime .") \
+        == "0 1287836182261 2 1 \n"
+
+
+@pytest.mark.parametrize("src", ['." never closes', ': hi ." hello ; hi'])
+def test_unclosed_text_says_so(src):
+    with pytest.raises(TrawlError, match="text never closes"):
+        parse(src)
+
+
 # ---------------------------------------------------------------- big numbers
 
 EDGE = [0, 1, -1, 2, -2, 3, 7, -7, 10, 2**31, 2**32 - 1, 2**61, 2**62 - 1, 2**62, -(2**62), -(2**62) - 1,
@@ -601,6 +668,15 @@ def test_receipt_from_the_interpreter_verifies(tmp_path):
 
 
 @needs_cc
+def test_verify_refuses_sample_without_a_save(tmp_path):
+    prog = tmp_path / "p.trawl"
+    prog.write_text("2 3 + .", encoding="utf-8")
+    rec = tmp_path / "p.receipt"
+    assert trawl_cli("run", str(prog), "--receipt", str(rec)).returncode == 0
+    r = trawl_cli("verify", str(rec), "--sample", "8")
+    assert r.returncode != 0 and "only work with --save" in r.stderr, r.stdout + r.stderr
+
+
 def test_receipt_of_a_saved_sweep_spot_checks_blocks(tmp_path):
     prog = tmp_path / "seven.trawl"
     prog.write_text(SWEEP_PROG, encoding="utf-8")
