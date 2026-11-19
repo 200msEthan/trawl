@@ -71,6 +71,14 @@ static void rt_die(const char *fmt, ...) {
   exit(1);
 }
 
+/* Words calling words: about as deep as the interpreter goes, then the same message (a C stack
+ * that overflowed would just crash). The build gives the program a stack big enough for it. */
+#define RT_MAX_DEPTH 25000
+static long rt_depth = 0;
+static void rt_too_deep(void) {
+  rt_die("the sea got too deep: words called inside words too many levels down. does a word call itself forever?");
+}
+
 /* ------------------------------------------------------------------ big numbers */
 
 typedef struct Big { struct Big *next; uint32_t mark; int sign; int n; limb d[]; } Big;
@@ -1277,6 +1285,7 @@ static void gc_run(long sp) {
 /* ------------------------------------------------------------------ program start */
 
 static void rt_reset_world(void) {
+  rt_depth = 0;
   rt_drain(); rt_hush(); wbuf_len = 0; tape_pos = 0;
   for (int i = 0; i < N_PEARL_WORDS; i++) { free(shells[i].t); shells[i].t = NULL; shells[i].cap = shells[i].n = 0; shells[i].on = 0; }
 }
@@ -1326,7 +1335,7 @@ int main(int argc, char **argv) {
     rt_flush();
     return 0;
   }
-  char *kept = NULL; size_t kept_len = 0; char *best = NULL; size_t best_len = 0; int has_best = 0;
+  char *kept = NULL; size_t kept_len = 0; char *best = NULL; size_t best_len = 0; int has_best = 0, has_kept = 0; /* a kept world may print nothing */
   for (;;) {
     rt_reset_world();
     if (!setjmp(world_jmp)) {
@@ -1335,7 +1344,7 @@ int main(int argc, char **argv) {
       printf("\n(%ld worlds sank along the way)\n", sunk);
       return 0;
     }
-    if (sink_kind == 1) { kept = (char *)realloc(kept, kept_len + wbuf_len + 1); memcpy(kept + kept_len, wbuf, wbuf_len); kept_len += wbuf_len; }
+    if (sink_kind == 1) { has_kept = 1; kept = (char *)realloc(kept, kept_len + wbuf_len + 1); memcpy(kept + kept_len, wbuf, wbuf_len); kept_len += wbuf_len; }
     else if (sink_kind == 2 && (!has_best || v_cmp(sink_score, best_score) < 0)) {
       has_best = 1; best_score = sink_score; best = (char *)realloc(best, wbuf_len + 1); memcpy(best, wbuf, wbuf_len); best_len = wbuf_len;
     }
@@ -1343,7 +1352,7 @@ int main(int argc, char **argv) {
     while (tape_n && v_eq(tape[tape_n - 1].cur, tape[tape_n - 1].hi) == VTRUE) tape_n--;
     sunk++;
     if (!tape_n) {
-      if (has_best || kept_len) {
+      if (has_best || has_kept) {
         fwrite(kept, 1, kept_len, stdout); if (has_best) fwrite(best, 1, best_len, stdout);
         printf("\n(%ld worlds sank along the way)\n", sunk);
         return 0;

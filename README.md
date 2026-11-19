@@ -58,8 +58,8 @@ and a native compiler. The search in [examples/a343507.trawl](examples/a343507.t
 a(10) and a(11) on its own: add `10 2935782889 19300000000 search .` at its bottom and run it with
 `trawl fast` (about 8 minutes on one core). The open problem itself is in
 [examples/erdos727](examples/erdos727): Johan Land's k = 3 family and a k = 4 family found by
-a research Claude (a lead, not a proof). On the same slice of the search, it runs about 3 times slower
-than the hand-written C, 8 times faster than plain Python, and 170 times faster than the
+a research Claude (a lead, not a proof). On the same slice of the search, it runs about 3 to 4 times slower
+than the hand-written C, 8 to 10 times faster than plain Python (it varies by machine), and 170 times faster than the
 original Tide engine ([docs/BENCHMARK.md](docs/BENCHMARK.md)). The 97 old Tide programs in the test suite
 still run and print exactly what they printed before.
 
@@ -122,7 +122,8 @@ it adds) in [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
   a step limit. It defines what Trawl means.
 - **`trawl fast` / `trawl build`** compile to C and then to machine code. Numbers are
   62-bit machine words that turn into exact big numbers when they overflow, so the output
-  is always the same as the interpreter's. Seabed cells at fixed addresses (the usual way to
+  is the same as the interpreter's (the few edges where they differ, like seabed addresses
+  of 2^62 and up, are listed in [docs/SPEC.md](docs/SPEC.md) section 15). Seabed cells at fixed addresses (the usual way to
   keep variables) live in CPU registers inside loops.
 
 The test suite checks that both engines print exactly the same thing, and that all 97
@@ -164,7 +165,7 @@ exactly what the program printed (`TRAWL_PROGRESS=0` turns it off).
 
 ```
 pip install -e .[test]
-python -m pytest          # the quick run, about 30 seconds
+python -m pytest          # the quick run, about a minute
 python -m pytest --all    # everything, as CI runs it: a few minutes
 ```
 

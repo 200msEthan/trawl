@@ -21,7 +21,8 @@ A program is text. It is split into **tokens** at whitespace. There are four kin
 - `#` starts a comment that runs to the end of the line, **except** on a line that also
   contains `."` text. (This keeps `#` usable inside printed text. Put comments on their
   own lines when a line prints something.)
-- Words are case-sensitive and can contain any characters except whitespace.
+- Words are case-sensitive and can contain any characters except whitespace and `#`
+  (which starts a comment).
 - Number literals can be any size.
 
 ## 2. Numbers
@@ -101,8 +102,10 @@ cond [ drop  A  cond ] drop        # while cond: A
 ## 8. Words of your own
 
 `: name body ;` defines a word. Words can call themselves and each other. A word can be
-defined again later; from then on the new meaning is used. Built-in words can't be
-redefined, and a number can't be a word's name.
+defined again later; from then on the new meaning is used, also by words defined before it.
+A word that is called before any definition of it has run is an error, at that moment.
+Built-in words can't be redefined, except `prime`, `spf` and `factorings`: your own
+definition of one of those takes over from the point it runs. A number can't be a word's name.
 
 ```
 : sq dup * ;
@@ -144,7 +147,7 @@ repeating, and how long the repeat is.
 | `wave` | `( lo hi -- x )` | guess a number from `lo` to `hi` |
 | `want` | `( flag -- )` | if `flag` is 0 this world is wrong: it sinks, and the sea rewinds to the last guess and tries its next number |
 | `more` | `( -- )` | keep what this world printed, then sink it anyway to find the next world |
-| `aim` | `( score -- )` | remember this world and its score, then sink it; at the end, what the lowest-scoring world printed is shown (ties go to the first) |
+| `aim` | `( score -- )` | remember this world and its score, then sink it; when the guesses run out, what the lowest-scoring world printed is shown (ties go to the first). A world that reaches the end of the program instead stops the search there, and only what was kept with `more` and that world's own output are shown |
 | `worlds` | `( -- n )` | how many worlds have sunk so far |
 
 Each world replays the program from the start in a fresh sea (empty stack, empty seabed,
@@ -189,8 +192,8 @@ engine can share them out and pick them up again:
   from FILE, and only the rest are run. FILE only resumes the program that wrote it; a changed
   program starts over (and says so).
 
-**The rule that makes this safe:** a block's changes to the seabed and to pearls stay in its
-own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
+**The rule that makes this safe:** a block's changes to the seabed, to pearls and to what
+`echo` remembers stay in its own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
 swept word should set every seabed cell it reads before it reads it. Scratch cells are fine;
 a running total kept in the seabed across calls is not (use the count, or print the finds).
 
@@ -220,8 +223,8 @@ language and the same in both engines, for example:
 - **Stuck loops.** Trawl is deterministic, so a loop that comes back to the exact same sea
   will repeat forever. The interpreter remembers what the sea looked like at the top of each
   pass and stops with a proof when a picture repeats. The picture is everything a pass can
-  see: the stack, the seabed, the words defined, what `echo` remembers and where `wave` is
-  on its guesses. It is only taken while stack, seabed and `echo`'s memory hold at most 256
+  see: the stack, the seabed, every definition run so far (a word defined again changes
+  the picture), what pearls remember, what `echo` remembers and where `wave` is on its guesses. It is only taken while stack, seabed and `echo`'s memory hold at most 256
   numbers between them; a bigger sea, or a loop that never repeats exactly (one that calls
   `echo` or `wave` each pass never does), runs until the step limit stops it.
 - **A step limit** (50 million by default; `--max-steps N`).
@@ -232,11 +235,11 @@ They also differ in a few edges that don't change any correct program's output:
 - Output is printed as the program runs (the interpreter in worlds mode collects it).
 - Unknown words are reported before the program starts, not when they are reached.
 - Seabed addresses must be smaller than 2^62 in size.
-- Words calling words: the interpreter goes about 25,000 levels deep and then stops with
-  `the sea got too deep`; the native build goes much deeper, and a word that calls itself
-  forever without growing the stack just runs forever there.
+- Words calling words: both engines stop with `the sea got too deep` about 25,000 levels
+  down (the native build at exactly 25,000; the interpreter's limit depends on the words,
+  somewhere between about 25,000 and 40,000).
 
-Without the two checks, a stuck loop or a runaway word makes a native build run forever, so
+Without the stuck-loop check and the step limit, a stuck loop makes a native build run forever, so
 try a new program on `trawl run` first. Everything else (results, printed text, error
 messages) is the same, and the test suite
 checks that on every example and every old Tide program.

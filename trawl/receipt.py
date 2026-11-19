@@ -27,7 +27,7 @@ import tempfile
 import time
 
 from . import __version__
-from .lang import TrawlError, parse
+from .lang import TrawlError, parse, read_source
 
 SWEEP_BLOCKS = 256  # the native runtime's block count (trawl_rt.h)
 
@@ -43,16 +43,14 @@ def normal(data):
 
 def program_files(path):
     """The program at path and every library it uses: (Program, {name: text}, main name)."""
-    with open(path, encoding="utf-8") as fh:
-        src = fh.read()
+    src = read_source(path)
     used = []
     prog = parse(src, path, used=used)
     main = os.path.basename(path)
     files = {main: src}
     for u in used:
         name = os.path.basename(u)
-        with open(u, encoding="utf-8") as fh:
-            text = fh.read()
+        text = read_source(u)
         if name in files and files[name] != text:
             raise TrawlError(f"two different libraries are both called {name}; a receipt needs their names to differ")
         files[name] = text
@@ -221,18 +219,45 @@ def first_took(r):
     return f" (the first run, with trawl {r['engine']}, took {clock(s)})" if isinstance(s, (int, float)) and s >= 1 else ""
 
 
+def read_receipt(path):
+    """Load a receipt and check its shape, so a damaged or hostile one fails with a plain message."""
+    bad = f"{os.path.basename(path)} isn't a Trawl receipt"
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            r = json.load(fh)
+    except (ValueError, UnicodeDecodeError):
+        raise TrawlError(f"{bad} (it isn't readable JSON)") from None
+    if not isinstance(r, dict) or type(r.get("receipt")) is not int:
+        raise TrawlError(bad)
+    if r["receipt"] != 1:
+        raise TrawlError(f"{bad} this Trawl can read (it's from a newer Trawl)")
+    prog, out = r.get("program"), r.get("output")
+    if not (isinstance(prog, dict) and isinstance(prog.get("files"), dict) and isinstance(prog.get("main"), str)
+            and isinstance(prog.get("sha256"), str) and prog["main"] in prog["files"]
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in prog["files"].items())
+            and isinstance(out, dict) and isinstance(out.get("sha256"), str)
+            and isinstance(out.get("bytes"), int) and isinstance(out.get("head"), str)
+            and r.get("engine") in ("run", "fast")
+            and (r.get("save") is None or (isinstance(r["save"], dict) and isinstance(r["save"].get("sha256"), str)))):
+        raise TrawlError(f"{bad} (parts of it are missing or the wrong kind)")
+    for name in prog["files"]:
+        # a file name, nothing more: a receipt must never write outside its own temporary folder
+        if name in ("", ".", "..") or "/" in name or "\\" in name or ":" in name or "\0" in name:
+            raise TrawlError(f"{bad}: it names a file `{name}` outside its own folder")
+    for key in ("trawl", "made", "machine"):
+        r[key] = str(r.get(key, "?"))
+    return r
+
+
 def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=None, say=print, ticker=None):
     """Check a receipt. Returns True when it holds.
 
     The re-run itself is silent, so it happens inside a progress Ticker ("still checking... 1:12")."""
     from .progress import Ticker
     ticker = ticker or Ticker("still checking")
-    with open(path, encoding="utf-8") as fh:
-        r = json.load(fh)
-    if r.get("receipt") != 1:
-        raise TrawlError(f"{path} isn't a Trawl receipt (or it's from a newer Trawl)")
+    r = read_receipt(path)
     files, main = r["program"]["files"], r["program"]["main"]
-    want = r["output"]["sha256"]
+    want = r["output"]["sha256"].lower()
     made = f"trawl {r['engine']}" + (f" --jobs {r['jobs']}" if r.get("jobs") else "")
     say(f"receipt: {main}, made {r['made']} with {made} on Trawl {r['trawl']} ({r['machine']})")
     if files_digest(files) != r["program"]["sha256"]:
@@ -252,7 +277,7 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
             with open(os.path.join(tmp, name), "w", encoding="utf-8") as fh:
                 fh.write(text)
         main_path = os.path.join(tmp, main)
-        prog = parse(files[main], main_path)
+        prog = parse(files[main], main_path, flat=True)
         t0 = time.time()
         plan = None
         if engine == "run":
@@ -260,9 +285,12 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
             if save is not None:
                 if uses_worlds(prog):
                     raise TrawlError("this program uses worlds, so its sweeps were never saved in blocks")
-                if r.get("save"):
+                if not r.get("save"):
+                    say("✗ this receipt was made without a save file, so it can't vouch for one")
+                    return False
+                if True:
                     with open(save, "rb") as fh:
-                        if sha256(fh.read()) != r["save"]["sha256"]:
+                        if sha256(fh.read()) != r["save"]["sha256"].lower():
                             say(f"✗ {os.path.basename(save)} is not the save file this receipt was made with")
                             return False
                 from .cgen import to_c
@@ -304,7 +332,12 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
     lines = got.count(b"\n")
     if plan is not None:
         how = "the interpreter, with the rest replayed from the save file"
-    if sha256(got) == want:
+    if sha256(got) == want and (r["output"]["bytes"] != len(got)
+                                or got.decode("utf-8", "replace")[:300] != r["output"]["head"]):
+        say(f"✗ re-ran on {how} in {took:.1f} s: the output matches, but the receipt's own byte count or "
+            "first lines were changed after it was made")
+        ok = False
+    elif sha256(got) == want:
         say(f"{'✓' if ok else '✗'} re-ran on {how} in {took:.1f} s: same output, "
             f"{len(got)} bytes, {lines} lines (sha256 {want[:16]})")
     else:

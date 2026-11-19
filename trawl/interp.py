@@ -26,6 +26,7 @@ class Sea:
         self.steps, self.max_steps, self.stream = 0, max_steps, stream
         self.tape, self.pos, self.sunk = ([] if tape is None else tape), 0, sunk
         self.pearls, self.echoes, self.echo_n = {}, {}, 0
+        self.defined = 0  # definitions run so far: a redefinition changes what a word means
         self.sweep_depth, self.plan = 0, None  # plan: replays and spot-checks saved sweep blocks (trawl verify)
 
     # -- small helpers
@@ -89,8 +90,10 @@ class Sea:
                 self.say(node.text)
             elif k is Def:
                 self.words[node.name] = node.body
+                self.defined += 1
             elif k is PearlDecl:
                 self.pearls.setdefault(node.name, {})
+                self.defined += 1
             elif k is Sweep:
                 self.sweep(node)
 
@@ -104,7 +107,7 @@ class Sea:
             # guess tape, so both go in too (a loop that calls them never repeats a picture,
             # and the step limit stops it instead of a wrong proof).
             if len(st) + len(self.bed) + len(self.echoes) <= 256:
-                sea = (tuple(st), len(self.words), tuple(sorted(self.bed.items())),
+                sea = (tuple(st), self.defined, tuple(sorted(self.bed.items())),
                        self.echo_n, tuple(sorted(self.echoes.items())), self.pos)
                 if sea in seen:
                     raise TrawlError(f"the tide is stuck: this loop came back to the exact same sea {list(st)}, so it can never end")
@@ -162,6 +165,7 @@ class Sea:
                     st.append(n)
                     self.exec(self.words[t])
                     shell[n] = st[-1] if st else self.pop(t)
+                    self.defined += 1  # a remembered answer skips the word next time: the sea changed
             else:
                 self.exec(self.words[t])
             return
@@ -234,6 +238,8 @@ class Sea:
             k, a = self.pop(t, 2), self.pop(t, 2)
             if k < 0:
                 raise TrawlError(f"tide numbers are whole: {a} to the power {k} would be a fraction")
+            if k >= 1 << 62 and a not in (0, 1, -1):  # 2^62 bits or more: no computer can hold it
+                raise TrawlError("that power is too big for the sea to hold")
             st.append(a ** k)
         elif t == "echo":
             hi, lo = self.pop(t, 2), self.pop(t, 2)
@@ -420,6 +426,7 @@ def uses_worlds(prog):
 # Words calling words nest Python calls, and Python's default limit (1000 frames) stopped
 # `trawl run` near 330 levels while `trawl fast` went millions deep. So a run gets its own
 # thread with a big stack and a high frame limit; past that, a plain `~` error, not a traceback.
+TOO_DEEP = "the sea got too deep: words called inside words too many levels down. does a word call itself forever?"
 DEEP_FRAMES = 100_000
 _DEEP_STACK = 255 * 1024 * 1024  # Windows wants a thread's stack below 256 MB
 
@@ -462,8 +469,7 @@ def _too_deep(fn):
     try:
         return fn()
     except RecursionError:
-        raise TrawlError("the sea got too deep: words called inside words too many levels down. "
-                         "does a word call itself forever?") from None
+        raise TrawlError(TOO_DEEP) from None
 
 
 def run(prog, max_steps=50_000_000, max_worlds=2_000_000, stream=None, plan=None):

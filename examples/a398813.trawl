@@ -10,7 +10,7 @@
 # 2^31 3^14 5^12 and prints each one that takes 7 or more steps: only that number itself.
 # Part 2 is a sweep over the exponent of 2, so it runs on every core:
 #   trawl fast examples/a398813.trawl --jobs 0 --receipt a398813.receipt
-# (about 12 minutes on 4 cores; it prints only 2507653251072000000000000)
+# (12 to 20 minutes on 4 cores, depending on the machine; it prints only 2507653251072000000000000)
 
 # pers ( n -- how many steps it takes to reach 1 )
 : pers 0 swap dup 1 - [ drop factorings swap 1 + swap dup 1 - ] drop drop ;

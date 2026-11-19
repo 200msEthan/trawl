@@ -16,12 +16,25 @@ import tempfile
 import time
 
 from . import __version__
-from .lang import TrawlError, parse
+from .lang import TrawlError, parse, read_source
+
+if hasattr(sys, "set_int_max_str_digits"):
+    sys.set_int_max_str_digits(0)  # numbers of any size, also in the compiler's constants
 
 
 def load(path):
-    with open(path, encoding="utf-8") as fh:
-        return parse(fh.read(), path)
+    return parse(read_source(path), path)
+
+
+def check_output(path, source, flag):
+    """Refuse an output file that would replace the program, or that has nowhere to go, before any work."""
+    if not path:
+        return
+    if os.path.exists(path) and os.path.exists(source) and os.path.samefile(path, source):
+        raise TrawlError(f"`{flag} {path}` would write over your program. pick another file name")
+    folder = os.path.dirname(os.path.abspath(path))
+    if not os.path.isdir(folder):
+        raise TrawlError(f"`{flag} {path}`: there is no folder {folder}")
 
 
 def exe_name(path):
@@ -32,6 +45,9 @@ def exe_name(path):
 def cmd_run(args):
     from .interp import run
     from .progress import Ticker
+    check_output(args.receipt, args.file, "--receipt")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # the same bytes the native build writes, on any console
     if args.receipt:
         from .receipt import Tee, program_files, write_receipt
         prog, files, main = program_files(args.file)
@@ -73,14 +89,17 @@ def sunk_mode(prog):
 
 def cmd_build(args):
     from .cgen import build
-    prog = load(args.file)
     out = args.output or exe_name(args.file)
+    check_output(out, args.file, "-o")
+    prog = load(args.file)
     build(prog, out, args.file, keep_c=args.keep_c)
     print(f"built {out}")
 
 
 def cmd_fast(args):
     from .cgen import build
+    check_output(args.receipt, args.file, "--receipt")
+    check_output(args.save, args.file, "--save")
     if args.receipt:
         from .receipt import program_files
         prog, files, main = program_files(args.file)
@@ -133,7 +152,7 @@ def cmd_c(args):
 
 
 def cmd_repl(args):
-    from .interp import Sea
+    from .interp import TOO_DEEP, Sea
     sea, n = Sea(), 0
     print(f"Trawl {__version__}. the sea is calm. try: use stdlib 10 fib .   (ctrl+d to leave)")
     while True:
@@ -145,7 +164,10 @@ def cmd_repl(args):
         n += 1
         sea.out, saved, sea.steps = [], list(sea.stack), 0
         try:
-            sea.run(parse(line))
+            try:
+                sea.run(parse(line))
+            except RecursionError:
+                raise TrawlError(TOO_DEEP) from None
             print("".join(sea.out) + ("  " if sea.out else "") + "\033[2m" + str(sea.stack) + "\033[0m")
         except TrawlError as e:
             sea.stack = saved
@@ -183,15 +205,26 @@ def main(argv=None):
     q.set_defaults(fn=cmd_repl)
     args = p.parse_args(argv)
     if not args.cmd:
-        if sys.stdin.isatty():
-            return cmd_repl(args)
-        p.print_help()
-        return
+        if not sys.stdin.isatty():
+            p.print_help()
+            return
+        args.fn = cmd_repl
+    from .interp import _deep
     try:
-        args.fn(args)
+        try:
+            _deep(lambda: args.fn(args))  # a big stack: deep words and deeply nested brackets both fit
+        except RecursionError:
+            raise TrawlError("the program nests too deep: brackets or words inside each other "
+                             "thousands of levels down") from None
     except TrawlError as e:
         sys.stdout.flush()
         sys.exit(f"~ {e}")
+    except BrokenPipeError:  # `trawl run x | head` stopped reading: that's fine, stop quietly
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass
+        sys.exit(0)
     except OSError as e:
         sys.exit(f"~ {e}")
     except KeyboardInterrupt:

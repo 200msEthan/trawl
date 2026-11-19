@@ -504,9 +504,19 @@ function addCatch(line, label) {
   if (intro.on) introCatch();
   return true;
 }
-function takeOutput(text) {
-  out.append(document.createTextNode(text));
+// printed text is put on the page once a frame: appending and scrolling on every small piece made
+// the browser lay out the whole output again each time, so a few thousand lines froze the tab
+let pendingOut = "", outFrame = 0;
+function flushOut() {
+  if (outFrame) { cancelAnimationFrame(outFrame); outFrame = 0; }
+  if (!pendingOut) return;
+  out.append(document.createTextNode(pendingOut));
+  pendingOut = "";
   out.scrollTop = out.scrollHeight;
+}
+function takeOutput(text) {
+  pendingOut += text;
+  if (!outFrame) outFrame = requestAnimationFrame(() => { outFrame = 0; flushOut(); });
   lineBuf += text;
   const parts = lineBuf.split("\n");
   lineBuf = parts.pop();
@@ -623,6 +633,7 @@ function startWorker() {
       $("now").textContent = at && t - nowAt.since < 1500 ? "now at " + fmt(at)
         : (Number(steps) / 1e6).toFixed(1) + " million steps so far";
     } else if (m.type === "done") {
+      flushOut();
       running = false; runBtn.textContent = "Run"; runBtn.classList.remove("stop");
       $("now").textContent = "";
       finishLine();
@@ -648,6 +659,7 @@ function showError(msg) {
 /* everything on screen that belongs to one run: cleared together, so nothing from an old run
    or another example can stay behind */
 function resetView() {
+  pendingOut = ""; flushOut();
   out.textContent = ""; list.textContent = ""; lineBuf = ""; catchQueue.length = 0;
   climaxTimers.forEach(clearTimeout); climaxTimers = [];
   $("now").textContent = ""; nowAt.value = ""; alertBox.hidden = true; setCount(0);

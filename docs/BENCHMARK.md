@@ -38,6 +38,9 @@ scans the whole slice. One core each, Linux, gcc 13 at `-O2`, Python 3.13, Intel
   answers past 2^62 with no changes.
 - Trawl is about **8 times faster than plain Python**, and about **170 times faster than
   the engine Tide started on**, on the identical program.
+- Timings move with the machine. A later check on a busy machine of the same class measured
+  Trawl at 3.5 to 4 times slower than C here and on the Collatz search, and plain Python at
+  about 10 times slower than Trawl. The answers never changed.
 - The old engine needed 22 minutes for this slice; at that rate the m = 11 search would
   have taken about 4 days. Natively it took about half an hour.
 

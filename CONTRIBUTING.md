@@ -16,7 +16,7 @@ Thanks for wanting to help. Small, careful changes are the most welcome kind.
 ```
 git clone https://github.com/connabyss/trawl && cd trawl
 pip install -e .[test]
-python -m pytest          # the quick run, about 30 seconds
+python -m pytest          # the quick run, about a minute
 python -m pytest --all    # everything, as CI runs it: a few minutes
 ```
 

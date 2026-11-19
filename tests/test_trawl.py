@@ -691,13 +691,19 @@ def test_receipt_of_a_saved_sweep_spot_checks_blocks(tmp_path):
     bad.write_bytes(save.read_bytes().replace(old, b"B 0 0 3000 0 11 2 2\n7 \n"))
     r = trawl_cli("verify", str(rec), "--save", str(bad), "--sample", "1")
     assert r.returncode == 1 and "not the save file" in r.stdout
-    # without the receipt's save stamp, re-running that block still catches the wrong count
+    # a receipt re-stamped to match the changed save file: re-running that block still catches the wrong count
+    import hashlib
     import json
     data = json.loads(rec.read_text(encoding="utf-8"))
-    del data["save"]
+    data["save"]["sha256"] = hashlib.sha256(bad.read_bytes()).hexdigest()
     rec.write_text(json.dumps(data), encoding="utf-8")
     r = trawl_cli("verify", str(rec), "--save", str(bad), "--sample", "256")
     assert r.returncode == 1 and "saved count 2, re-run count 1" in r.stdout, r.stdout
+    # and a receipt with no save stamp at all can't vouch for any save file
+    del data["save"]
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--save", str(bad), "--sample", "256")
+    assert r.returncode == 1 and "made without a save file" in r.stdout, r.stdout
 
 
 # ---------------------------------------------------------------- the "still running" line
@@ -850,3 +856,169 @@ def test_spiral_packing_records_natively(native):
     cells = [int(r.split()[-1]) for r in native(spiral(20000)).splitlines() if r.startswith("value ")]
     assert cells == [1, 2, 4, 6, 8, 12, 14, 18, 24, 28, 34, 52, 62, 70, 76, 88, 94, 106, 116,
                      150, 164, 540, 806, 820, 1212, 1988, 2530, 2734, 5822, 18136]  # values 1 .. 30
+
+
+# ---------------------------------------------------------------- cold read, round 2
+# A word is looked up when the call happens (SPEC 8): defined late, again, inside another
+# word or inside an `if`. The compiler used to settle it when it compiled.
+
+def both(native, src):
+    """What the interpreter says (its output, or its error) and what the native build says."""
+    try:
+        want = interp(src)
+    except TrawlError as e:
+        want = f"~ {e}"
+        return want, native(src, expect_error=True).strip()
+    return want, native(src)
+
+
+LOOKUP = [
+    ": a b ; a : b 1 . ;",
+    ": s 1 3 sweep g ; s . : g ;",
+    ": f 1 . ; 3 [ f : f 2 . ; 1 - ] drop",
+    ": g drop 1 ; : s 0 3 sweep g ; : g drop 0 ; s .",
+    ": t 7 prime . ; t : prime drop 42 ; t",
+    ": t 7 prime . ; t : prime drop 42 ; t : prime drop 2 ; t",
+    "depth if : f 1 . ; then f",
+    ': .x 7 . ; : f ." x" ; : g f ; g : f .x ; g',
+    ": outer : inner 5 . ; ; : x 7 . ; x",
+    "0 if : g 1 ; then : h 5 . ; h",
+    ": outer : inner 5 . ; ; inner",
+    "more",
+    "1 3 wave 2 = if more then 0 want",
+    ": unused 1 2 wave ; 5 .",
+    '." x\x00y"',
+]
+
+
+@needs_cc
+@pytest.mark.parametrize("src", LOOKUP)
+def test_engines_agree_on_word_lookup(native, src):
+    want, got = both(native, src)
+    assert got == want
+
+
+@pytest.mark.parametrize("src", [
+    ": f -1 dig 1 + -1 bury ; pearl f 1 [ drop 5 f drop -1 dig if 0 -1 bury 1 else 99 . 0 then ]",
+    ": f 0 ; : callf f ; 1 [ drop callf if 99 . 0 else : f 1 ; 1 then ]",
+])
+def test_stuck_proof_sees_redefinitions_and_pearls(engine, src):
+    assert engine(src) == "99 \n"
+
+
+def test_power_too_big_on_both_engines(engine):
+    src = "9999999999999999999999 4611686018427387904 power ."
+    if engine is interp:
+        with pytest.raises(TrawlError, match="that power is too big"):
+            interp(src)
+    else:
+        assert "that power is too big" in engine(src, expect_error=True)
+
+
+@needs_cc
+def test_native_deep_words_stop_with_the_same_message(native):
+    assert "the sea got too deep" in native(": f dup 1 + f + ; 0 f .", expect_error=True)
+    assert native(": d dup 0 > if 1 - d 1 + then ; 20000 d .") == "20000 \n"
+
+
+def test_source_with_a_byte_order_mark_or_bad_bytes(tmp_path):
+    good, bad = tmp_path / "bom.trawl", tmp_path / "bad.trawl"
+    good.write_bytes(b"\xef\xbb\xbf1 2 + .\n")
+    bad.write_bytes(b"\xff\xfe1\n")
+    assert trawl_cli("run", str(good)).stdout == "3 \n"
+    r = trawl_cli("run", str(bad))
+    assert r.returncode != 0 and "isn't UTF-8 text" in r.stderr and "Traceback" not in r.stderr
+
+
+def test_outputs_never_overwrite_the_program(tmp_path):
+    prog = tmp_path / "x.trawl"
+    prog.write_text("1 .", encoding="utf-8")
+    for args in (["build", str(prog), "-o", str(prog)], ["run", str(prog), "--receipt", str(prog)],
+                 ["fast", str(prog), "--save", str(prog)]):
+        r = trawl_cli(*args)
+        assert r.returncode != 0 and "would write over your program" in r.stderr, args
+    assert prog.read_text(encoding="utf-8") == "1 ."
+    r = trawl_cli("run", str(prog), "--receipt", str(tmp_path / "nope" / "r.rc"))
+    assert r.returncode != 0 and "there is no folder" in r.stderr and r.stdout == ""
+
+
+@needs_cc
+def test_huge_literal_on_the_native_engine(native):
+    n = "7" * 5000
+    assert native(f"{n} 10 digsum .") == f"{7 * 5000} \n"
+
+
+def test_deeply_nested_brackets_are_a_plain_error_or_fine(tmp_path):
+    prog = tmp_path / "n.trawl"
+    prog.write_text("0 " + "[ " * 3000 + "] " * 3000 + "5 .", encoding="utf-8")
+    r = trawl_cli("run", str(prog))
+    assert r.stdout == "5 \n" and "Traceback" not in r.stderr, r.stderr[-500:]
+
+
+def test_repl_runaway_word_is_a_plain_error():
+    r = subprocess.run([sys.executable, "-m", "trawl", "repl"], input=": l l ; l\n2 .\n", capture_output=True,
+                       text=True, encoding="utf-8", timeout=120, env={**os.environ, "PYTHONPATH": str(ROOT)})
+    assert "the sea got too deep" in r.stdout and "Traceback" not in r.stderr and "2" in r.stdout
+
+
+def _receipt(tmp_path):
+    import json
+    prog = tmp_path / "p.trawl"
+    prog.write_text("2 3 + .", encoding="utf-8")
+    rec = tmp_path / "p.receipt"
+    assert trawl_cli("run", str(prog), "--receipt", str(rec)).returncode == 0
+    return rec, json.loads(rec.read_text(encoding="utf-8"))
+
+
+def test_hostile_receipt_cant_write_outside_its_folder(tmp_path):
+    import json
+    from trawl.receipt import files_digest
+    rec, data = _receipt(tmp_path)
+    target = tmp_path / "escaped.txt"
+    for name in (str(target), "../escaped.txt", "..\\escaped.txt"):
+        files = dict(data["program"]["files"], **{name: "hi"})
+        data2 = dict(data, program=dict(data["program"], files=files, sha256=files_digest(files)))
+        rec.write_text(json.dumps(data2), encoding="utf-8")
+        r = trawl_cli("verify", str(rec), "--engine", "run")
+        assert r.returncode != 0 and "outside its own folder" in r.stderr, r.stdout + r.stderr
+    assert not target.exists() and not (tmp_path.parent / "escaped.txt").exists()
+
+
+@pytest.mark.parametrize("damage", ["{}", '{"receipt": 1}', "not json", '{"receipt": true}', "[1]"])
+def test_damaged_receipt_is_a_plain_error(tmp_path, damage):
+    rec = tmp_path / "bad.receipt"
+    rec.write_text(damage, encoding="utf-8")
+    r = trawl_cli("verify", str(rec))
+    assert r.returncode != 0 and "isn't a Trawl receipt" in r.stderr and "Traceback" not in r.stderr, r.stderr
+
+
+def test_receipt_details_are_checked(tmp_path):
+    import json
+    rec, data = _receipt(tmp_path)
+    data["output"]["sha256"] = data["output"]["sha256"].upper()  # the same hash, written in capitals: fine
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    assert trawl_cli("verify", str(rec), "--engine", "run").returncode == 0
+    data["output"]["bytes"] = 999  # the output matches, but the receipt's own numbers were changed
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--engine", "run")
+    assert r.returncode == 1 and "changed after it was made" in r.stdout
+
+
+def test_receipt_made_without_a_save_cant_vouch_for_one(tmp_path):
+    rec, _ = _receipt(tmp_path)
+    sav = tmp_path / "x.sav"
+    sav.write_text("whatever", encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--save", str(sav), "--sample", "2")
+    assert r.returncode == 1 and "made without a save file" in r.stdout, r.stdout + r.stderr
+
+
+def test_receipt_with_a_library_in_another_folder(tmp_path):
+    (tmp_path / "lib").mkdir()
+    (tmp_path / "main").mkdir()
+    (tmp_path / "lib" / "helpers.trawl").write_text(": twice 2 * ;", encoding="utf-8")
+    prog = tmp_path / "main" / "p.trawl"
+    prog.write_text("use ../lib/helpers 21 twice .", encoding="utf-8")
+    rec = tmp_path / "p.receipt"
+    assert trawl_cli("run", str(prog), "--receipt", str(rec)).returncode == 0
+    r = trawl_cli("verify", str(rec), "--engine", "run")
+    assert r.returncode == 0 and "same output" in r.stdout, r.stdout + r.stderr
