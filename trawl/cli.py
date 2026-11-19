@@ -16,12 +16,81 @@ import tempfile
 import time
 
 from . import __version__
-from .lang import TrawlError, parse
+from .lang import TrawlError, parse, read_source
+
+if hasattr(sys, "set_int_max_str_digits"):
+    sys.set_int_max_str_digits(0)  # numbers of any size, also in the compiler's constants
 
 
 def load(path):
-    with open(path, encoding="utf-8") as fh:
-        return parse(fh.read(), path)
+    return parse(read_source(path), path)
+
+
+def program_paths(source):
+    """The program and every library it uses, so no output file can land on any of them."""
+    used = []
+    try:
+        parse(read_source(source), source, used=used)
+    except (TrawlError, OSError):
+        pass  # the run itself will say what's wrong with it
+    return [source] + used
+
+
+def check_output(path, sources, flag):
+    """Refuse an output file that would replace the program or a library it uses, or that has nowhere to go,
+    before any work."""
+    if path is None:
+        return
+    if path == "":
+        raise TrawlError(f"`{flag}` needs a file name")
+    if os.path.isdir(path):
+        raise TrawlError(f"`{flag} {path}` is a folder. give a file name")
+    for i, src in enumerate(sources):
+        if os.path.exists(path) and os.path.exists(src) and os.path.samefile(path, src):
+            what = "your program" if i == 0 else f"{os.path.basename(src)}, a library your program uses"
+            raise TrawlError(f"`{flag} {path}` would write over {what}. pick another file name")
+    folder = os.path.dirname(os.path.abspath(path))
+    if not os.path.isdir(folder):
+        raise TrawlError(f"`{flag} {path}`: there is no folder {folder}")
+
+
+def check_save(path):
+    """--save may only replace a Trawl save file (or nothing): never notes, code or anything else."""
+    if path and os.path.isfile(path) and os.path.getsize(path):
+        with open(path, "rb") as fh:
+            if not fh.read(11) == b"trawl-save ":
+                raise TrawlError(f"`--save {path}`: that file isn't a Trawl save file, and a run would write over "
+                                 "it. pick a new file name")
+
+
+EXE_MAGIC = (b"\x7fELF", b"MZ", b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe")
+
+
+def check_kind(path, flag, ok, what):
+    """An output may replace an earlier output of the same kind (or nothing), never anything else."""
+    if path and os.path.isfile(path) and os.path.getsize(path):
+        with open(path, "rb") as fh:
+            head = fh.read(64)
+        if not ok(head):
+            raise TrawlError(f"`{flag} {path}`: that file isn't {what}, and this would write over it. "
+                             "pick a new file name")
+
+
+def check_receipt(path):
+    check_kind(path, "--receipt", lambda h: h.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"{"), "a Trawl receipt")
+
+
+def check_exe(path, flag="-o"):
+    check_kind(path, flag, lambda h: h.startswith(EXE_MAGIC), "a program Trawl built")
+
+
+def check_c(path):
+    check_kind(path, "--keep-c", lambda h: h.startswith(b"/* made by the Trawl compiler"), "C that Trawl wrote")
+
+
+def check_steps(n):
+    if n < 1:
+        raise TrawlError(f"--max-steps needs a number of steps above 0, not {n}")
 
 
 def exe_name(path):
@@ -32,6 +101,11 @@ def exe_name(path):
 def cmd_run(args):
     from .interp import run
     from .progress import Ticker
+    check_steps(args.max_steps)
+    check_output(args.receipt, program_paths(args.file), "--receipt")
+    check_receipt(args.receipt)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")  # the same bytes the native build writes, on any console
     if args.receipt:
         from .receipt import Tee, program_files, write_receipt
         prog, files, main = program_files(args.file)
@@ -73,14 +147,35 @@ def sunk_mode(prog):
 
 def cmd_build(args):
     from .cgen import build
-    prog = load(args.file)
+    if args.output == "":
+        raise TrawlError("`-o` needs a file name")
+    if os.path.isdir(args.file):
+        raise TrawlError(f"{args.file} is a folder, not a Trawl program")
     out = args.output or exe_name(args.file)
+    paths = program_paths(args.file)
+    if args.output is None and os.path.abspath(out) == os.path.abspath(args.file):
+        raise TrawlError(f"the program built from {args.file} would be called {out}, the same name. "
+                         "pick a name for it with -o")
+    check_output(out, paths, "-o")
+    check_exe(out)
+    check_output(args.keep_c, paths, "--keep-c")
+    check_c(args.keep_c)
+    if args.keep_c is not None and os.path.abspath(args.keep_c) == os.path.abspath(out):
+        raise TrawlError("`-o` and `--keep-c` name the same file. give the C file its own name")
+    prog = load(args.file)
     build(prog, out, args.file, keep_c=args.keep_c)
     print(f"built {out}")
 
 
 def cmd_fast(args):
     from .cgen import build
+    paths = program_paths(args.file)
+    check_output(args.receipt, paths, "--receipt")
+    check_output(args.save, paths, "--save")
+    check_save(args.save)
+    check_receipt(args.receipt)
+    if args.save and args.receipt and os.path.abspath(args.save) == os.path.abspath(args.receipt):
+        raise TrawlError("`--save` and `--receipt` name the same file. give each its own name")
     if args.receipt:
         from .receipt import program_files
         prog, files, main = program_files(args.file)
@@ -122,6 +217,7 @@ def cmd_verify(args):
     from .receipt import verify
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")  # a console that can't show ✓ gets ? instead of a crash
+    check_steps(args.max_steps)
     ok = verify(args.receipt, engine=args.engine, save=args.save, sample=args.sample, max_steps=args.max_steps,
                 seed=args.seed)
     sys.exit(0 if ok else 1)
@@ -133,8 +229,10 @@ def cmd_c(args):
 
 
 def cmd_repl(args):
-    from .interp import Sea
+    from .interp import TOO_DEEP, Sea, _deep
     sea, n = Sea(), 0
+    color = sys.stdout.isatty()
+    dim, red, off = ("\033[2m", "\033[1;91m", "\033[0m") if color else ("", "", "")
     print(f"Trawl {__version__}. the sea is calm. try: use stdlib 10 fib .   (ctrl+d to leave)")
     while True:
         try:
@@ -143,13 +241,25 @@ def cmd_repl(args):
             print("\nthe tide goes out. bye.")
             return
         n += 1
-        sea.out, saved, sea.steps = [], list(sea.stack), 0
+        sea.out, saved, sea.steps, limit = [], list(sea.stack), 0, sea.max_steps
+
+        def stop():  # Ctrl+C: the line stops at its next step, and the sea keeps its words
+            sea.max_steps = -1
+
         try:
-            sea.run(parse(line))
-            print("".join(sea.out) + ("  " if sea.out else "") + "\033[2m" + str(sea.stack) + "\033[0m")
+            try:
+                _deep(lambda: sea.run(parse(line)), on_interrupt=stop)
+            except RecursionError:
+                raise TrawlError(TOO_DEEP) from None
+            print("".join(sea.out) + ("  " if sea.out else "") + dim + str(sea.stack) + off)
+        except KeyboardInterrupt:
+            sea.stack = saved
+            print(f"{red}~ stopped (Ctrl+C){off}  {dim}(stack put back: {saved}){off}")
         except TrawlError as e:
             sea.stack = saved
-            print(f"\033[1;91m~ {e}\033[0m  \033[2m(stack put back: {saved})\033[0m")
+            print(f"{red}~ {e}{off}  {dim}(stack put back: {saved}){off}")
+        finally:
+            sea.max_steps = limit
 
 
 def main(argv=None):
@@ -181,17 +291,34 @@ def main(argv=None):
     c.add_argument("file"); c.set_defaults(fn=cmd_c)
     q = sub.add_parser("repl", help="interactive sea")
     q.set_defaults(fn=cmd_repl)
+    for name in ("stdout", "stderr"):  # started with that stream closed (`trawl run x >&-`): write nowhere
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
     args = p.parse_args(argv)
     if not args.cmd:
-        if sys.stdin.isatty():
-            return cmd_repl(args)
-        p.print_help()
-        return
+        if not sys.stdin.isatty():
+            p.print_help()
+            return
+        args.fn = cmd_repl
+    from .interp import _deep
     try:
-        args.fn(args)
+        try:
+            if args.fn is cmd_repl:
+                cmd_repl(args)  # each line gets its own big stack, so Ctrl+C can stop just that line
+            else:
+                _deep(lambda: args.fn(args))  # a big stack: deep words and deeply nested brackets both fit
+        except RecursionError:
+            raise TrawlError("the program nests too deep: brackets or words inside each other "
+                             "thousands of levels down") from None
     except TrawlError as e:
         sys.stdout.flush()
         sys.exit(f"~ {e}")
+    except BrokenPipeError:  # `trawl run x | head` stopped reading: that's fine, stop quietly
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass
+        sys.exit(0)
     except OSError as e:
         sys.exit(f"~ {e}")
     except KeyboardInterrupt:

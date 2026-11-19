@@ -11,10 +11,11 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from .lang import (Def, If, Loop, Num, PearlDecl, Program, Sweep, Text, TrawlError, WANTS, Word,
-                   BUILTINS, YOURS_WINS, suggest, where)
+                   BUILTINS, YOURS_WINS, shown, special_hint, suggest, where)
 
 RUNTIME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime")
 SMALL_MIN, SMALL_MAX = -(1 << 62), (1 << 62) - 1
@@ -174,9 +175,16 @@ class Gen:
         self.by_name = {}
         for i, d in enumerate(prog.defs):
             self.by_name.setdefault(d.name, []).append(i)
+        self.def_index = {id(d): i for i, d in enumerate(prog.defs)}
+        # Words defined more than once with different bodies. The interpreter calls whichever
+        # meaning is in force when the call happens, so the compiled code keeps a "current
+        # meaning" number for each of them, set where each definition is reached.
+        self.varied = {name for name, idxs in self.by_name.items()
+                       if len({self.shape(prog.defs[i].body) for i in idxs}) > 1}
         self.pearl_ids = {}
         self.worlds = False
         self.def_seen = 0
+        self.sure, self.cond = set(), 0  # names surely defined by now at the top level; inside an if/loop?
         self.nloops = 0
         self.loop_cells, self.loop_written = {}, {}
         self.promoted = set()
@@ -191,38 +199,25 @@ class Gen:
             self.consts.append(n)
         return f"K[{self.const_index[n]}]"
 
-    # -- word lookup (the definition in force where the word is used)
-    def resolve(self, name, at, top_level):
-        idxs = self.by_name.get(name)
-        if not idxs:
-            return None
-        bodies = {self.shape(self.prog.defs[i].body) for i in idxs}
-        if len(bodies) == 1:
-            return idxs[-1]
-        before = [i for i in idxs if i < at]
-        if before:
-            return before[-1]
-        return None if top_level else idxs[0]
-
     def shape(self, body):
         out = []
         for n in body:
             if isinstance(n, Word):
-                out.append(n.name)
+                out.append(n.name + "@" + where(n.tok))  # where it is matters: an unknown word's error names its line
             elif isinstance(n, Num):
                 out.append(str(n.value))
             elif isinstance(n, Text):
-                out.append("." + n.text)
+                out.append("\x00." + n.text + "\x00")  # never the same as a word's name
             elif isinstance(n, Loop):
-                out.append("[" + self.shape(n.body) + "]")
+                out.append("\x00[ " + self.shape(n.body) + " \x00]")  # never the same as a word like `[x]`
             elif isinstance(n, If):
-                out.append("if(" + self.shape(n.then) + "|" + (self.shape(n.other) if n.other is not None else "") + ")")
+                out.append("\x00if( " + self.shape(n.then) + " \x00| " + (self.shape(n.other) if n.other is not None else "") + " \x00)")
             elif isinstance(n, Def):
-                out.append(":" + n.name + "(" + self.shape(n.body) + ")")
+                out.append("\x00: " + n.name + " \x00( " + self.shape(n.body) + " \x00)")
             elif isinstance(n, PearlDecl):
-                out.append("pearl " + n.name)
+                out.append("\x00pearl " + n.name)
             elif isinstance(n, Sweep):
-                out.append("sweep " + n.name)
+                out.append("\x00sweep " + n.name + "@" + where(n.tok))
         return " ".join(out)
 
     def fn_name(self, i):
@@ -239,9 +234,7 @@ class Gen:
             for node in body:
                 size += 1
                 if isinstance(node, (Word, Sweep)):
-                    j = self.resolve(node.name, i + 1, False)
-                    if j is not None:
-                        calls[i].add(j)
+                    calls[i].update(self.meanings(node.name))
                 elif isinstance(node, Loop):
                     size += walk(node.body, i)
                 elif isinstance(node, If):
@@ -276,7 +269,7 @@ class Gen:
         order = sorted(range(n), key=lambda i: len(calls[i]))
         for _ in range(3):  # leaves first, then words built from them
             for i in order:
-                if self.inline[i] or not plain[i] or self.prog.defs[i].name in self.pearl_names or self.prog.defs[i].name in self.sweep_names or reaches(i):
+                if self.inline[i] or not plain[i] or self.prog.defs[i].name in self.varied or self.prog.defs[i].name in YOURS_WINS or self.prog.defs[i].name in self.pearl_names or self.prog.defs[i].name in self.sweep_names or reaches(i):
                     continue
                 total.clear()
                 if expanded(i) <= 80:
@@ -291,10 +284,10 @@ class Gen:
                 if isinstance(n, Def) and top:
                     at += 1
                 elif isinstance(n, (Word, Sweep)):
-                    j = self.resolve(n.name, at, top)
-                    if j is not None and j not in seen:
-                        seen.add(j)
-                        todo.append(j)
+                    for j in self.meanings(n.name):  # any meaning may be the one in force
+                        if j not in seen:
+                            seen.add(j)
+                            todo.append(j)
                 elif isinstance(n, Loop):
                     at = walk(n.body, at, top)
                 elif isinstance(n, If):
@@ -316,17 +309,30 @@ class Gen:
             if k is Num:
                 f.push(f.const(node.value))
             elif k is Text:
-                f.emit(f"rt_puts({c_string(node.text)});")
+                f.emit(f"rt_out({c_string(node.text)}, {len(node.text.encode('utf-8'))});")  # the length, not strlen: text may hold a NUL
             elif k is Def:
                 if top_level:
                     self.def_seen += 1
+                    if not self.cond and node.name not in self.varied:
+                        self.sure.add(node.name)
+                f.emit(f"{self.state(node.name)} = {self.def_index[id(node)]};")
             elif k is PearlDecl:
-                pid = self.pearl_ids.setdefault(node.name, len(self.pearl_ids))
-                f.emit(f"shells[{pid}].on = 1;")
-            elif k is If:
-                self.if_(f, node, at, top_level)
-            elif k is Loop:
-                self.loop(f, node, at, top_level)
+                msg = c_string(f"{where(node.tok)}: `pearl {shown(node.name)}`: nobody in the sea knows the word `{shown(node.name)}` yet")
+                if node.name not in self.by_name:
+                    f.flush()
+                    f.emit(f'rt_die("%s", {msg});')
+                else:
+                    if node.name not in self.sure:
+                        f.flush()
+                        f.emit(f'if ({self.state(node.name)} < 0) rt_die("%s", {msg});')
+                    pid = self.pearl_ids.setdefault(node.name, len(self.pearl_ids))
+                    f.emit(f"shells[{pid}].on = 1;")
+            elif k is If or k is Loop:
+                self.cond += 1  # a definition in here may or may not run
+                try:
+                    (self.if_ if k is If else self.loop)(f, node, at, top_level)
+                finally:
+                    self.cond -= 1
             elif k is Word:
                 self.word(f, node, self.at(at, top_level), top_level)
             elif k is Sweep:
@@ -412,38 +418,130 @@ class Gen:
         f.reload()
         f.known = 0
 
+    def dispatch(self, f, node):
+        """Call a word that has several meanings: the one in force right now."""
+        t = node.name
+        f.flush()
+        f.spill()
+        f.emit(f"switch (cur{self.by_name[t][0]}) {{")
+        for i in self.by_name[t]:
+            fn = self.fn_name(i)
+            if t in self.pearl_names:
+                pid = self.pearl_ids.setdefault(t, len(self.pearl_ids))
+                f.emit(f"case {i}: sp = rt_call_pearl({pid}, {fn}, {c_string(t)}, sp); break;")
+            else:
+                f.emit(f"case {i}: sp = {fn}(sp); break;")
+        if t in YOURS_WINS:
+            f.emit("default: {")
+            self.builtin(f, node)
+            f.flush()
+            f.emit("}")
+        else:
+            f.emit(f"default: {self.die_unknown(node)}")
+        f.emit("}")
+        f.reload()
+        f.known = 0
+
     def sweep(self, f, node, at, top_level):
         t = node.name
-        target = self.resolve(t, at, top_level)
         f.flush()
-        if target is None:
+        msg = f"{where(node.tok)}: nobody in the sea knows the word `{shown(t)}` yet, so `sweep` can't run it."
+        if t not in self.by_name:
             f.emit(f"if (sp < 2) rt_underflow(\"sweep\", 2);")
-            msg = f"{where(node.tok)}: nobody in the sea knows the word `{t}` yet, so `sweep` can't run it."
             f.emit(f"rt_die(\"%s\", {c_string(msg)});")
             return
         f.spill()
         pid = self.pearl_ids.setdefault(t, len(self.pearl_ids)) if t in self.pearl_names else -1
-        f.emit(f"sp = rt_sweep({pid}, {self.fn_name(target)}, {c_string(t)}, sp);")
+        f.emit("{ long (*fp)(long) = 0;")
+        f.emit(f"switch ({self.state(t)}) {{")
+        for i in self.meanings(t):
+            for j in (self.by_name[t] if t not in self.varied else [i]):
+                f.emit(f"case {j}: fp = {self.fn_name(i)}; break;")
+        f.emit("}")
+        if len(self.by_name[t]) > 1:
+            # the word can be defined again while the sweep runs: look it up for every n, as the interpreter does
+            f.emit(f"if (fp) fp = {self.sweep_caller(t)};")
+        f.emit(f"if (!fp) {{ if (sp < 2) rt_underflow(\"sweep\", 2); rt_die(\"%s\", {c_string(msg)}); }}")
+        f.emit(f"sp = rt_sweep({pid}, fp, {c_string(t)}, sp); }}")
         f.reload()
         f.known = 0
 
+    def sweep_caller(self, t):
+        """A function that calls t's meaning at the moment of each call."""
+        if t not in self.sweep_callers:
+            name = f"sweepcall{len(self.sweep_callers)}_{c_name(t)}"
+            lines = [f"static long {name}(long sp) {{", f"  switch ({self.state(t)}) {{"]
+            for i in self.meanings(t):
+                for j in (self.by_name[t] if t not in self.varied else [i]):
+                    lines.append(f"  case {j}: return {self.fn_name(i)}(sp);")
+            lines += ["  }", "  return sp;", "}"]
+            self.sweep_callers[t] = (name, lines)
+        return self.sweep_callers[t][0]
+
+    # -- calling your own words. The interpreter looks a word up when the call happens, so a
+    # word can be defined late, defined again, defined inside another word or inside an `if`.
+    # Each name keeps a "current meaning" number, set where each definition is reached.
+    def state(self, name):
+        return f"cur{self.by_name[name][0]}"
+
+    def unknown(self, node, extra=""):
+        t = node.name
+        return f"{where(node.tok)}: nobody in the sea knows the word `{shown(t)}`{extra}"
+
+    def die_unknown(self, node):
+        """C that stops with the interpreter's message, whose "did you mean" names only a builtin or a word
+        defined at the moment of the call: the best match among those is picked when the call happens."""
+        import difflib
+        t = node.name
+        if special_hint(t):  # a hint about comments or whole numbers, not a near name
+            return f'rt_die("%s", {c_string(self.unknown(node, "." + suggest(t, ())))});'
+        ranked = difflib.get_close_matches(t, list(BUILTINS) + sorted(set(self.by_name) - {t}), 1 << 20, 0.6)
+        code = []
+        for name in ranked:
+            msg = c_string(self.unknown(node, f". did you mean `{name}`?"))
+            if name in BUILTINS:  # always there: the search stops here
+                code.append(f'rt_die("%s", {msg});')
+                return " else ".join(code)
+            code.append(f'if ({self.state(name)} >= 0) rt_die("%s", {msg});')
+        code.append(f'rt_die("%s", {c_string(self.unknown(node, "."))});')
+        return " else ".join(code)
+
+    def meanings(self, name):
+        """The definitions a call to name can land on (all of them for a word defined differently twice)."""
+        idxs = self.by_name.get(name, [])
+        return list(idxs) if name in self.varied else idxs[-1:]
+
     def word(self, f, node, at, top_level):
         t = node.name
-        target = self.resolve(t, at, top_level)
-        if t in YOURS_WINS and top_level and target is not None and target >= at:
-            target = None  # the program's own word isn't defined yet: the built-in answers, as in the interpreter
-        if target is None and t in self.by_name and t not in YOURS_WINS:
-            # used at the top level before any definition: the sea doesn't know it yet
+        if t not in self.by_name:
+            return self.builtin(f, node)
+        if t in self.varied:
+            return self.dispatch(f, node)
+        target = self.by_name[t][-1]
+        sure = top_level and t in self.sure  # defined above, outside any if or loop: no check needed
+        if not sure and t in YOURS_WINS:
+            # before the program's own definition runs, the built-in answers, as in the interpreter
             f.flush()
-            msg = f"{where(node.tok)}: nobody in the sea knows the word `{t}` yet (it is defined further down)"
-            f.emit(f"rt_die(\"%s\", {c_string(msg)});")
+            f.spill()
+            f.emit(f"if ({self.state(t)} >= 0) {{")
+            self.call(f, node, target)
+            f.emit("} else {")
+            self.builtin(f, node)
+            f.flush()
+            f.emit("}")
+            f.reload()
+            f.known = 0
             return
-        if target is not None:
-            if self.inline[target]:
-                self.body(f, self.prog.defs[target].body, target + 1, False)
-            else:
-                self.call(f, node, target)
-            return
+        if not sure:
+            f.flush()
+            f.emit(f"if (UNLIKELY({self.state(t)} < 0)) {{ {self.die_unknown(node)} }}")
+        if self.inline[target]:
+            self.body(f, self.prog.defs[target].body, target + 1, False)
+        else:
+            self.call(f, node, target)
+
+    def builtin(self, f, node):
+        t = node.name
         if t in BINOPS:
             b, a = f.pop(t, 2), f.pop(t, 2)
             if a.const is not None and b.const is not None:
@@ -523,22 +621,20 @@ class Gen:
         elif t == "hush":
             f.emit("rt_hush();")
         elif t == "wave":
-            self.worlds = True
             hi, lo = f.pop(t, 2), f.pop(t, 2)
             f.push(f.temp(f"rt_wave({lo.expr}, {hi.expr})"))
         elif t == "want":
-            self.worlds = True
             f.emit(f"if ({f.pop(t, 1).expr} == 0) rt_sink(0, 0);")
         elif t == "more":
-            self.worlds = True
             f.emit("rt_sink(1, 0);")
         elif t == "aim":
-            self.worlds = True
             f.emit(f"rt_sink(2, {f.pop(t, 1).expr});")
         elif t == "worlds":
             f.push(f.temp("MKV(sunk)"))
         else:
-            raise TrawlError(f"{where(node.tok)}: nobody in the sea knows the word `{t}`.{suggest(t, self.by_name)}")
+            # a word defined nowhere: the run stops when it gets here, after printing what came before
+            f.flush()
+            f.emit(self.die_unknown(node))
 
     def pearl_scan(self, nodes):
         for n in nodes:
@@ -568,7 +664,9 @@ class Gen:
         return [ln.replace("@@GLO@@", str(glo)).replace("@@GHI@@", str(ghi)) for ln in out]
 
     def generate(self):
-        self.pearl_names, self.sweep_names = set(), set()
+        from .interp import uses_worlds
+        self.worlds = uses_worlds(self.prog)  # the same test as the interpreter: a world word anywhere
+        self.pearl_names, self.sweep_names, self.sweep_callers = set(), set(), {}
         self.pearl_scan(self.prog.body)
         for d in self.prog.defs:
             self.pearl_scan(d.body)
@@ -582,12 +680,16 @@ class Gen:
                 continue  # never called (or always copied into its callers): no function needed
             f = Fn(self)
             f.emit("GC_POLL(sp);")
+            f.emit("if (UNLIKELY(++rt_depth > RT_MAX_DEPTH)) rt_too_deep();")
             self.body(f, d.body, i + 1, False)
             f.flush()
+            f.emit("rt_depth--;")
             f.emit("return sp;")
             funcs.append((self.fn_name(i), f.lines))
         self.def_seen = 0
         main = Fn(self)
+        for name in sorted(self.by_name):
+            main.emit(f"cur{self.by_name[name][0]} = -1;")  # every world starts before any definition
         self.body(main, self.prog.body, 0, True)
         main.flush()
         main.emit("return sp;")
@@ -599,7 +701,10 @@ class Gen:
                f"#define N_PEARL_WORDS {max(1, len(self.pearl_ids))}",
                '#include "trawl_rt.h"',
                f"static V K[{max(1, len(self.consts))}];"]
+        out += [f"static int cur{self.by_name[name][0]} = -1;" for name in sorted(self.by_name)]
         out += [f"static long {name}(long sp);" for name, _ in funcs]
+        for _, lines in self.sweep_callers.values():
+            out += lines
         for name, lines in funcs:
             out.append(f"static long {name}(long sp) {{")
             out += self.render(lines)
@@ -637,7 +742,13 @@ def build(prog, out_path, file="<program>", opt="-O2", keep_c=None):
         c_path = keep_c or os.path.join(tmp, "prog.c")
         with open(c_path, "w", encoding="utf-8") as fh:
             fh.write(code)
-        cmd = [cc, opt, "-std=gnu99", "-w", "-I", RUNTIME, "-o", out_path, c_path]
+        cmd = [cc, opt, "-std=gnu99", "-w", "-I", RUNTIME, "-o", out_path, "-x", "c", c_path, "-x", "none"]  # C whatever its name
+        if os.name == "nt":  # Windows gives a program 1 MB of stack unless asked: ask for 256 MB
+            cmd.append("-Wl,--stack,268435456")
+        elif sys.platform == "darwin":
+            cmd.append("-Wl,-stack_size,0x10000000")
+        else:  # elsewhere the program runs on a thread of its own with a big stack (see trawl_rt.h)
+            cmd.append("-pthread")
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             raise TrawlError("the C compiler refused the generated code (this is a Trawl bug, please report it):\n" + r.stderr[-3000:])

@@ -21,7 +21,8 @@ A program is text. It is split into **tokens** at whitespace. There are four kin
 - `#` starts a comment that runs to the end of the line, **except** on a line that also
   contains `."` text. (This keeps `#` usable inside printed text. Put comments on their
   own lines when a line prints something.)
-- Words are case-sensitive and can contain any characters except whitespace.
+- Words are case-sensitive and can contain any characters except whitespace and `#`
+  (which starts a comment).
 - Number literals can be any size.
 
 ## 2. Numbers
@@ -57,9 +58,9 @@ effects are written `( before -- after )`, top of the stack on the right.
 | `+ - *` | `( a b -- a+b )`, `( a b -- a-b )`, `( a b -- a*b )` |
 | `/ %` | `( a b -- floor(a/b) )`, `( a b -- a mod b )` |
 | `= < >` | `( a b -- flag )` |
-| `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1) |
-| `prime` | `( n -- flag )` 1 if `n` is prime, else 0 (0 for `n < 2`). Exact below 3.3·10^24 (strong probable-prime tests to the first 13 primes, which no composite below that passes). Above it, it is a probable-prime test: right for any number you're likely to meet, but a composite built on purpose to fool those 13 tests would pass |
-| `spf` | `( n -- p )` the smallest prime factor of `n` (`n >= 2`; `n` itself when `n` is prime, by the same test as `prime`). Fast up to about 10^30; a number whose two smallest prime factors both have 20 or more digits can take a very long time |
+| `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1). An answer over 2^34 bits (about 5 billion digits) is refused |
+| `prime` | `( n -- flag )` 1 if `n` is prime, else 0 (0 for `n < 2`). Exact below 3317044064679887385961981 ≈ 3.3·10^24 (strong probable-prime tests to the first 13 primes, which no composite below that passes; that number is the first one that does). From there up it tests to the first 20 primes, so that number is caught, but it is a probable-prime test: right for any number you're likely to meet, though a composite built on purpose to fool all 20 tests would pass |
+| `spf` | `( n -- p )` the smallest prime factor of `n` (`n >= 2`; `n` itself when `n` is prime, by the same test as `prime`). Fast when `n` has a small prime factor; a number whose two smallest prime factors both have 15 or more digits takes seconds, and 20 or more digits can take a very long time |
 | `factorings` | `( n -- count )` how many ways `n` is a product of whole numbers above 1, order ignored (OEIS A001055; `n >= 1`, and `1 factorings` is 1). `12 factorings` is 4: 12, 2·6, 3·4, 2·2·3. It factors `n` (as `spf` does) and counts from the exponents alone, remembering every exponent pattern it has counted. Exact for any size; slow when `n` has many distinct prime factors with large exponents |
 
 ## 5. Digits in any base
@@ -68,8 +69,8 @@ These are Trawl's own words, the ones the research ran on.
 
 | Word | Effect | |
 |---|---|---|
-| `digsum` | `( x base -- s )` | sum of the digits of `abs(x)` in `base` (`base >= 2`). Always matches `x` mod `base - 1`. |
-| `altsum` | `( x base -- s )` | units - tens + hundreds - ... of `abs(x)`. Always matches `x` mod `base + 1`. |
+| `digsum` | `( x base -- s )` | sum of the digits of `abs(x)` in `base` (`base >= 2`). Always matches `abs(x)` mod `base - 1`. |
+| `altsum` | `( x base -- s )` | units - tens + hundreds - ... of `abs(x)`. Always matches `abs(x)` mod `base + 1`. |
 
 `1234 10 digsum` is 10. `1234 10 altsum` is 2. `255 2 digsum` is 8 (the number of 1 bits).
 
@@ -101,8 +102,10 @@ cond [ drop  A  cond ] drop        # while cond: A
 ## 8. Words of your own
 
 `: name body ;` defines a word. Words can call themselves and each other. A word can be
-defined again later; from then on the new meaning is used. Built-in words can't be
-redefined, and a number can't be a word's name.
+defined again later; from then on the new meaning is used, also by words defined before it.
+A word that is called before any definition of it has run is an error, at that moment.
+Built-in words can't be redefined, except `prime`, `spf` and `factorings`: your own
+definition of one of those takes over from the point it runs. A number can't be a word's name.
 
 ```
 : sq dup * ;
@@ -131,7 +134,7 @@ fixed addresses inside loops are kept in CPU registers.
 
 | Word | Effect | |
 |---|---|---|
-| `echo` | `( lo hi -- k )` | look at seabed cells `lo..hi`. If they have looked exactly like this at an earlier `echo`, push how many echoes ago that was (the length of the loop); otherwise push 0. Either way, remember this picture. |
+| `echo` | `( lo hi -- k )` | look at seabed cells `lo..hi`. If they have looked exactly like this at an earlier `echo`, push how many echoes ago that was (the length of the loop); otherwise push 0. Either way, remember this picture. At most 16777216 cells at once. |
 | `hush` | `( -- )` | forget every picture |
 
 With `echo`, a program can find for itself when a system (a reef, a deck, a ferry) starts
@@ -144,7 +147,7 @@ repeating, and how long the repeat is.
 | `wave` | `( lo hi -- x )` | guess a number from `lo` to `hi` |
 | `want` | `( flag -- )` | if `flag` is 0 this world is wrong: it sinks, and the sea rewinds to the last guess and tries its next number |
 | `more` | `( -- )` | keep what this world printed, then sink it anyway to find the next world |
-| `aim` | `( score -- )` | remember this world and its score, then sink it; at the end, what the lowest-scoring world printed is shown (ties go to the first) |
+| `aim` | `( score -- )` | remember this world and its score, then sink it; when the guesses run out, what the lowest-scoring world printed is shown (ties go to the first). A world that reaches the end of the program instead stops the search there, and only what was kept with `more` and that world's own output are shown |
 | `worlds` | `( -- n )` | how many worlds have sunk so far |
 
 Each world replays the program from the start in a fresh sea (empty stack, empty seabed,
@@ -160,7 +163,7 @@ stops with an error.
 ## 12. Pearls: remembered answers
 
 `pearl name` makes the word `name` remember answers. A pearled word must take one number
-and leave one; after `pearl name`, asking it the same number again gives the remembered
+and leave one (a run stops with an error the first time it doesn't); after `pearl name`, asking it the same number again gives the remembered
 answer without running it. Pearls work through recursion, so
 `: fib dup 2 < if else dup 1 - fib swap 2 - fib + then ; pearl fib` makes `90 fib` instant.
 
@@ -187,10 +190,12 @@ engine can share them out and pick them up again:
 - **`--save FILE`** writes each finished block (its count and its printed words) to FILE.
   Stop the run at any point and start the same command again: finished blocks are replayed
   from FILE, and only the rest are run. FILE only resumes the program that wrote it; a changed
-  program starts over (and says so).
+  program starts over (and says so). Each block carries a check of its own, so a block
+  damaged on disk runs again, along with every block after it. `--save` never writes over a
+  file that isn't a Trawl save file.
 
-**The rule that makes this safe:** a block's changes to the seabed and to pearls stay in its
-own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
+**The rule that makes this safe:** a block's changes to the seabed, to pearls, to what
+`echo` remembers, to the words it defines and to the stack below n stay in its own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
 swept word should set every seabed cell it reads before it reads it. Scratch cells are fine;
 a running total kept in the seabed across calls is not (use the count, or print the finds).
 
@@ -208,28 +213,38 @@ language and the same in both engines, for example:
 - `you tried to split 7 into zero pieces. the ocean refuses.`
 - `base 1 has no digits. try 2 or more.`
 - `tide numbers are whole: 2 to the power -1 would be a fraction`
+- `that power is too big for the sea to hold`
+- `the sea ran out of memory`
 - `nobody in the sea knows the word `flod`. did you mean `fold`?`
 - `` `sweep two` wants `two` to turn each n into one answer, but at n = 1 it left 2 numbers in its place``
 - `the tide is stuck: this loop came back to the exact same sea [...], so it can never end` (interpreter only, see below)
+- `the sea got too deep: words called inside words too many levels down. does a word call itself forever?` (interpreter only, see below)
 
 ## 15. The two engines
 
 **`trawl run`** (reference interpreter, Python) checks two extra things:
 
-- **Stuck loops.** Trawl is deterministic, so a loop that comes back to the exact same stack
-  and seabed will repeat forever. The interpreter remembers what the sea looked like at the
-  top of each pass (while stack plus seabed hold at most 256 numbers) and stops with a
-  proof when a picture repeats.
+- **Stuck loops.** Trawl is deterministic, so a loop that comes back to the exact same sea
+  will repeat forever. The interpreter remembers what the sea looked like at the top of each
+  pass and stops with a proof when a picture repeats. The picture is everything a pass can
+  see: the stack, the seabed, every definition run so far (a word defined again changes
+  the picture), what pearls remember, what `echo` remembers and where `wave` is on its guesses. It is only taken while stack, seabed and `echo`'s memory hold at most 256
+  numbers between them; a bigger sea, or a loop that never repeats exactly (one that calls
+  `echo` or `wave` each pass never does), runs until the step limit stops it.
 - **A step limit** (50 million by default; `--max-steps N`).
 
 **`trawl fast` / `trawl build`** (native compiler, through C) skip both checks, for speed.
 They also differ in a few edges that don't change any correct program's output:
 
 - Output is printed as the program runs (the interpreter in worlds mode collects it).
-- Unknown words are reported before the program starts, not when they are reached.
-- Definitions are resolved where a word is used in the text. A word used at the top level
-  before any definition of it is an error when reached, as in the interpreter.
 - Seabed addresses must be smaller than 2^62 in size.
+- Words calling words: both engines stop with `the sea got too deep` thousands of levels
+  down (the native build at exactly 25,000; the interpreter's limit depends on the words:
+  about 25,000 to 40,000 for plain words, nearer 16,000 for words full of nested `if`s or loops).
+- A word with loops nested hundreds deep takes the C compiler a long time (seconds to minutes)
+  to build; the interpreter starts it at once.
 
-Everything else (results, printed text, error messages) is the same, and the test suite
+Without the stuck-loop check and the step limit, a stuck loop makes a native build run forever, so
+try a new program on `trawl run` first. Everything else (results, printed text, error
+messages) is the same, and the test suite
 checks that on every example and every old Tide program.

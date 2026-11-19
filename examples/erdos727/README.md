@@ -35,8 +35,9 @@ Both counts match a separate Python check using Legendre's formula.
   n+3 = (2t^2-3)(4t^2-3)       n+4 = 2(t-1)(t+1)(4t^2-5)
   ```
 
-  and k = 4 holds for about 4% of t (707 values below 20000). **This is a lead, not a proof.**
-  A steady 4% suggests infinitely many solutions, but nobody has shown it.
+  and k = 4 holds for a few percent of t: 53 below 2000 (2.7%), 157 below 5000 (3.1%), 707
+  below 20000 (3.5%). **This is a lead, not a proof.** A share that holds up, or even grows,
+  suggests infinitely many solutions, but nobody has shown it.
   Two more families behave the same way: 216t^4 + 66t^2 + 2 and 1000t^4 - 210t^2 + 7.
 - **Why the quadratic families stop at k = 3.** If n = at^2 + bt + c and n+1, ..., n+4 all
   split into linear factors, four squares would have to be in arithmetic progression, which

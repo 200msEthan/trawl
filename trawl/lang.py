@@ -99,7 +99,7 @@ class Program:
     defs: list = field(default_factory=list)  # every Def, in the order they appear
 
 
-NUMBER = re.compile(r"[+-]?\d+(?:_\d+)*\Z")
+NUMBER = re.compile(r"[+-]?\d+(?:_\d+)*\Z", re.ASCII)  # 0-9 only, as the spec says
 
 
 def tokens(src, file="<program>"):
@@ -115,7 +115,10 @@ def where(tok):
     return f"{os.path.basename(tok.file)}:{tok.line}"
 
 
-def find_lib(name, search):
+def find_lib(name, search, flat=False):
+    """flat: every library sits in one folder under its own file name (a receipt being checked)."""
+    if flat:
+        name = re.split(r"[\\/]", name)[-1]
     for d in search:
         for ext in EXTENSIONS:
             p = os.path.join(d, name + ext)
@@ -124,7 +127,7 @@ def find_lib(name, search):
     return None
 
 
-def expand(toks, search, depth=0, used=None):
+def expand(toks, search, depth=0, used=None, flat=False):
     """Replace every `use name` with the tokens of name.trawl (or name.tide).
     `used`, if given, collects the path of every library file read."""
     out, i = [], 0
@@ -134,7 +137,7 @@ def expand(toks, search, depth=0, used=None):
             if i + 1 >= len(toks):
                 raise TrawlError(f"{where(t)}: `use` needs the name of a library after it")
             name = toks[i + 1].text
-            path = find_lib(name, search)
+            path = find_lib(name, search, flat)
             if path is None:
                 raise TrawlError(f"{where(t)}: no library called `{name}` (looked for {name}.trawl and {name}.tide)")
             if depth > 50:
@@ -142,7 +145,7 @@ def expand(toks, search, depth=0, used=None):
             here = [os.path.dirname(os.path.abspath(path))] + search
             if used is not None and path not in used:
                 used.append(path)
-            out += expand(tokens(open(path, encoding="utf-8").read(), path), here, depth + 1, used)
+            out += expand(tokens(read_source(path), path), here, depth + 1, used, flat)
             i += 2
         else:
             out.append(t)
@@ -190,6 +193,8 @@ class Parser:
                 raise TrawlError(f"{where(t)}: a stray `{s}` with nothing open for it to close")
             elif s.startswith('."') and len(s) >= 3 and s.endswith('"'):
                 body.append(Text(s[2:-1].lstrip(), t))
+            elif s.startswith('."'):
+                raise TrawlError(f"{where(t)}: this `.\"` text never closes. end it with a `\"`")
             elif NUMBER.match(s):
                 body.append(Num(int(s), t))
             else:
@@ -217,18 +222,48 @@ class Parser:
         return d
 
 
-def parse(src, file="<program>", search=None, used=None):
+def read_source(path):
+    """A program or library file as text: UTF-8, with or without a byte-order mark."""
+    with open(path, "rb") as fh:
+        data = fh.read()
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError as e:
+        raise TrawlError(f"{os.path.basename(path)} isn't UTF-8 text (byte {e.start + 1} is {data[e.start]:#04x}). "
+                         "save it as UTF-8 and try again") from None
+
+
+def parse(src, file="<program>", search=None, used=None, flat=False):
     """Source text -> Program. `search` lists folders for `use`; the program's folder and lib/ are added.
     `used`, if given, collects the path of every library file read."""
     dirs = list(search or [])
     if file and file != "<program>":
         dirs.insert(0, os.path.dirname(os.path.abspath(file)))
     dirs.append(LIB_DIR)
-    p = Parser(expand(tokens(src, file), dirs, used=used))
+    if src.startswith("\ufeff"):  # a byte-order mark some editors put first
+        src = src[1:]
+    p = Parser(expand(tokens(src, file), dirs, used=used, flat=flat))
     body, _ = p.block([])
     return Program(body, p.defs)
 
 
+def shown(name):
+    """A word as an error message shows it: invisible characters (a NUL, an escape) written as \\xNN."""
+    return "".join(f"\\x{ord(c):02x}" if ord(c) < 32 or ord(c) == 127 else c for c in name)
+
+
+def special_hint(name):
+    """A hint for a word that isn't a misspelling: a `#` that isn't a comment, or a number that isn't whole."""
+    if name.startswith("#"):
+        return " on a line with `.\"` text, `#` isn't a comment. put the comment on its own line"
+    if re.fullmatch(r"[+-]?(\d[\d_]*)?\.\d+|[+-]?\d[\d_]*\.\d*|[+-]?\d[\d_]*(\.\d*)?[eE][+-]?\d+", name):
+        return " Trawl's numbers are all whole: no decimal points or exponents"
+    return None
+
+
 def suggest(name, known):
+    hint = special_hint(name)
+    if hint:
+        return hint
     near = difflib.get_close_matches(name, list(BUILTINS) + list(known), 1, 0.6)
     return f" did you mean `{near[0]}`?" if near else ""

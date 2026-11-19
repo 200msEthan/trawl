@@ -6,7 +6,7 @@ Trawl is a small stack language for hunting patterns in the integers: a referenc
 (`trawl run`) and a native compiler through C (`trawl fast`, `trawl build`). The spec is
 [docs/SPEC.md](docs/SPEC.md).
 
-- Set up with `pip install -e .[test]`. Run `python -m pytest` after every change (about 30 seconds), and
+- Set up with `pip install -e .[test]`. Run `python -m pytest` after every change (about a minute), and
   `python -m pytest --all` before you open a pull request. `--all` needs gcc or clang.
 - The interpreter defines the language. If the engines disagree, the compiler has the bug. Never change
   `trawl/interp.py` to match `trawl/cgen.py`.

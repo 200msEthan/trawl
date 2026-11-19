@@ -13,8 +13,13 @@ if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)  # Trawl numbers can have any number of digits
 
 from .lang import (Def, If, Loop, Num, PearlDecl, Program, Sweep, Text, TrawlError, WANTS, Word,
-                   parse, suggest)
+                   parse, shown, suggest)
 
+
+def _steps(n):
+    if n >= 1_000_000 and n % 1_000_000 == 0:
+        return f"{n // 1_000_000:,} million steps"
+    return f"{n:,} steps"
 
 class Sink(Exception):
     """This world is wrong. Rewind."""
@@ -26,6 +31,7 @@ class Sea:
         self.steps, self.max_steps, self.stream = 0, max_steps, stream
         self.tape, self.pos, self.sunk = ([] if tape is None else tape), 0, sunk
         self.pearls, self.echoes, self.echo_n = {}, {}, 0
+        self.defined = 0  # definitions run so far: a redefinition changes what a word means
         self.sweep_depth, self.plan = 0, None  # plan: replays and spot-checks saved sweep blocks (trawl verify)
 
     # -- small helpers
@@ -71,7 +77,7 @@ class Sea:
         for node in body:
             self.steps += 1
             if self.steps > self.max_steps:
-                raise TrawlError(f"the tide never went out: {self.max_steps // 1_000_000} million steps and still going")
+                raise TrawlError(f"the tide never went out: {_steps(self.max_steps)} and still going")
             k = type(node)
             if k is Num:
                 st.append(node.value)
@@ -89,8 +95,12 @@ class Sea:
                 self.say(node.text)
             elif k is Def:
                 self.words[node.name] = node.body
+                self.defined += 1
             elif k is PearlDecl:
+                if node.name not in self.words:
+                    raise TrawlError(f"{_where(node)}`pearl {shown(node.name)}`: nobody in the sea knows the word `{shown(node.name)}` yet")
                 self.pearls.setdefault(node.name, {})
+                self.defined += 1
             elif k is Sweep:
                 self.sweep(node)
 
@@ -99,9 +109,13 @@ class Sea:
         st = self.stack
         while st and st[-1] != 0:
             # The sea is deterministic: if a loop comes back to the exact same stack and
-            # seabed, it will repeat forever. Proof, not a guess.
-            if len(st) + len(self.bed) <= 256:
-                sea = (tuple(st), len(self.words), tuple(sorted(self.bed.items())))
+            # seabed, it will repeat forever. Proof, not a guess. The picture holds
+            # everything a pass can see: `echo` remembers past looks and `wave` reads the
+            # guess tape, so both go in too (a loop that calls them never repeats a picture,
+            # and the step limit stops it instead of a wrong proof).
+            if len(st) + len(self.bed) + len(self.echoes) <= 256:
+                sea = (tuple(st), self.defined, tuple(sorted(self.bed.items())),
+                       self.echo_n, tuple(sorted(self.echoes.items())), self.pos)
                 if sea in seen:
                     raise TrawlError(f"the tide is stuck: this loop came back to the exact same sea {list(st)}, so it can never end")
                 if len(seen) < 50_000:
@@ -112,7 +126,7 @@ class Sea:
         name, st = node.name, self.stack
         hi, lo = self.pop("sweep", 2), self.pop("sweep", 2)
         if name not in self.words:
-            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{name}` yet, so `sweep` can't run it.")
+            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{shown(name)}` yet, so `sweep` can't run it.")
         check_sweep_range(lo, hi)
         call = Word(name, node.tok)
 
@@ -155,9 +169,13 @@ class Sea:
                 if n in shell:
                     st.append(shell[n])
                 else:
+                    base = len(st)
                     st.append(n)
                     self.exec(self.words[t])
-                    shell[n] = st[-1] if st else self.pop(t)
+                    if len(st) != base + 1:
+                        raise TrawlError(pearl_shape_error(t, n, len(st) - base))
+                    shell[n] = st[-1]
+                    self.defined += 1  # a remembered answer skips the word next time: the sea changed
             else:
                 self.exec(self.words[t])
             return
@@ -191,6 +209,8 @@ class Sea:
             c = self.pop(t)
             if not 0 <= c <= 0x10FFFF:
                 raise TrawlError(f"emit wants a character number from 0 to 1114111, not {c}")
+            if 0xD800 <= c <= 0xDFFF:
+                raise TrawlError(f"emit can't print {c}: 55296 to 57343 are not characters (they are halves of UTF-16 pairs)")
             self.say(chr(c))
         elif t == ".s":
             self.say("<" + " ".join(map(str, st)) + "> ")
@@ -228,9 +248,14 @@ class Sea:
             k, a = self.pop(t, 2), self.pop(t, 2)
             if k < 0:
                 raise TrawlError(f"tide numbers are whole: {a} to the power {k} would be a fraction")
+            # more than 2^34 bits (about 5 billion digits): too big to work with, so refuse it
+            if a not in (0, 1, -1) and k > (1 << 34) // (abs(a).bit_length() - 1):
+                raise TrawlError("that power is too big for the sea to hold")
             st.append(a ** k)
         elif t == "echo":
             hi, lo = self.pop(t, 2), self.pop(t, 2)
+            if hi - lo + 1 > 1 << 24:
+                raise TrawlError(f"echo can look at 16777216 seabed cells at most, not {hi - lo + 1}")
             key = tuple(self.bed.get(a, 0) for a in range(lo, hi + 1))
             st.append(self.echo_n - self.echoes[key] if key in self.echoes else 0)
             self.echoes[key] = self.echo_n
@@ -255,7 +280,7 @@ class Sea:
         elif t == "worlds":
             st.append(self.sunk)
         else:
-            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{t}`.{suggest(t, self.words)}")
+            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{shown(t)}`.{suggest(t, self.words)}")
 
 
 
@@ -265,6 +290,10 @@ class Sea:
 # two engines always agree. `spf` finds the smallest prime factor with trial division, then
 # Pollard-Brent rho.
 _BASES = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41)
+# 3317044064679887385961981 is the smallest composite that passes all 13 (it is also where the
+# exact range ends). From there up, seven more bases, so that number and its kind are caught.
+_EXACT_BELOW = 3317044064679887385961981
+_MORE_BASES = _BASES + (43, 47, 53, 59, 61, 67, 71)
 
 
 def is_prime(n):
@@ -277,7 +306,7 @@ def is_prime(n):
     while d % 2 == 0:
         d //= 2
         s += 1
-    for a in _BASES:
+    for a in (_BASES if n < _EXACT_BELOW else _MORE_BASES):
         x = pow(a, d, n)
         if x == 1 or x == n - 1:
             continue
@@ -390,6 +419,12 @@ def check_sweep_range(lo, hi):
         raise TrawlError(f"`sweep` runs from {lo} up to {hi}, but both ends must lie between -2^62 and 2^62 - 1")
 
 
+def pearl_shape_error(name, n, got):
+    got = max(got, 0)
+    return (f"`{name}` is a pearl, so it has to turn each n into one answer, but at n = {n} "
+            f"it left {got} number{'' if got == 1 else 's'} in its place")
+
+
 def sweep_shape_error(name, n, got):
     return (f"`sweep {name}` wants `{name}` to turn each n into one answer, "
             f"but at n = {n} it left {got} number{'s' if got != 1 else ''} in its place")
@@ -407,8 +442,80 @@ def uses_worlds(prog):
     return walk(prog.body)
 
 
+# Words calling words nest Python calls, and Python's default limit (1000 frames) stopped
+# `trawl run` near 330 levels while `trawl fast` went millions deep. So a run gets its own
+# thread with a big stack and a high frame limit; past that, a plain `~` error, not a traceback.
+NO_MEMORY = "the sea ran out of memory"
+TOO_DEEP = "the sea got too deep: words called inside words too many levels down. does a word call itself forever?"
+DEEP_FRAMES = 100_000
+_DEEP_STACK = 255 * 1024 * 1024  # Windows wants a thread's stack below 256 MB
+
+
+def _deep(fn, on_interrupt=None):
+    """Run fn on a thread with a big stack. With on_interrupt, Ctrl+C calls it (it should make fn stop soon),
+    waits for fn to finish, then raises KeyboardInterrupt."""
+    import threading
+    if getattr(_deep, "inside", False):
+        return fn()
+    box, done = {}, threading.Event()
+
+    def work():  # only this thread has the big stack, so only it gets the high frame limit
+        _deep.inside, limit = True, sys.getrecursionlimit()
+        sys.setrecursionlimit(max(limit, DEEP_FRAMES))
+        try:
+            box["value"] = fn()
+        except BaseException as e:  # carried back to the caller's thread
+            box["error"] = e
+        finally:
+            _deep.inside = False
+            sys.setrecursionlimit(limit)
+            done.set()
+    try:
+        old = threading.stack_size(_DEEP_STACK)
+    except (ValueError, RuntimeError):  # no big stacks here: run as is
+        return fn()
+    try:
+        t = threading.Thread(target=work, daemon=True)
+        t.start()
+    except RuntimeError:  # no threads at all (the playground, in the browser): run as is
+        return fn()
+    finally:
+        threading.stack_size(old)
+    import time
+    stopped = False
+    # short sleeps, so Ctrl+C still reaches this thread. (Not t.join: on Python 3.10 a Ctrl+C inside join can
+    # leave the thread looking finished while it still runs.)
+    while not done.is_set():
+        try:
+            time.sleep(0.05)
+        except KeyboardInterrupt:
+            if on_interrupt is None:
+                raise
+            on_interrupt()
+            stopped = True
+    t.join()
+    if stopped:
+        raise KeyboardInterrupt
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
+
+
+def _too_deep(fn):
+    try:
+        return fn()
+    except RecursionError:
+        raise TrawlError(TOO_DEEP) from None
+    except MemoryError:
+        raise TrawlError(NO_MEMORY) from None
+
+
 def run(prog, max_steps=50_000_000, max_worlds=2_000_000, stream=None, plan=None):
     """Run a parsed program. Returns (printed text, worlds sunk or None)."""
+    return _deep(lambda: _too_deep(lambda: _run(prog, max_steps, max_worlds, stream, plan)))
+
+
+def _run(prog, max_steps, max_worlds, stream, plan):
     if not uses_worlds(prog):
         sea = Sea(max_steps=max_steps, stream=stream)
         sea.plan = plan

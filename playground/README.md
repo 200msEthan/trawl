@@ -11,7 +11,8 @@ which is Python compiled to WebAssembly. Nothing gets installed, and no server r
   `python playground/build.py`. The page embeds those files, and a test fails if it's out of date.
 
 Every printed line that starts with a number shows up as a catch; a line that starts with `= ` shows as a
-highlighted summary card instead, and isn't counted. Programs run in a background worker. **Stop** ends a run right away, and the step limit
-(20 million) and output limit (500,000 characters) keep a runaway program from freezing the tab.
+highlighted summary card instead, and isn't counted. Programs run in a background worker. **Stop** ends a run right away, and the output limit
+(500,000 characters) keeps a program that prints without end from freezing the tab. There is no step limit
+here, so a loop that never ends runs until you press Stop.
 The playground is the interpreter, so it is much slower than `trawl fast`. For real searches,
 install Trawl.
