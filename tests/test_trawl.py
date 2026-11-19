@@ -1270,7 +1270,10 @@ def test_build_names_its_own_output_plainly(tmp_path):
     noext = tmp_path / "noext"
     noext.write_text("1 .", encoding="utf-8")
     r = trawl_cli("build", str(noext))
-    assert r.returncode != 0 and "pick a name for it with -o" in r.stderr and "`-o" not in r.stderr, r.stderr
+    if os.name == "nt":  # there the build is noext.exe, a different file: fine
+        assert r.returncode == 0, r.stderr
+    else:
+        assert r.returncode != 0 and "pick a name for it with -o" in r.stderr and "`-o" not in r.stderr, r.stderr
     r = trawl_cli("build", str(tmp_path))
     assert r.returncode != 0 and "is a folder, not a Trawl program" in r.stderr, r.stderr
 
