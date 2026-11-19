@@ -807,7 +807,7 @@ static void rt_grow(long need) {
 #define ENSURE(n) do { if (UNLIKELY((long)(n) > CAP)) rt_grow((long)(n)); } while (0)
 
 static void rt_underflow(const char *word, int want) {
-  rt_die("the tide went out too far: `%s` wanted %d number%s, the shore was empty", word, want, want > 1 ? "s" : "");
+  rt_die("the tide went out too far: `%s` wanted %d number%s, but the shore ran out", word, want, want > 1 ? "s" : "");
 }
 
 static void rt_dots(long sp) {

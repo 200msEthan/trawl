@@ -37,7 +37,7 @@ class Sea:
     # -- small helpers
     def pop(self, word, want=1):
         if not self.stack:
-            raise TrawlError(f"the tide went out too far: `{word}` wanted {want} number{'s' if want > 1 else ''}, the shore was empty")
+            raise TrawlError(f"the tide went out too far: `{word}` wanted {want} number{'s' if want > 1 else ''}, but the shore ran out")
         return self.stack.pop()
 
     def say(self, text):
@@ -108,6 +108,10 @@ class Sea:
         seen = set()
         st = self.stack
         while st and st[-1] != 0:
+            # Each pass is a step, so even an empty loop `[ ]` runs into the step limit.
+            self.steps += 1
+            if self.steps > self.max_steps:
+                raise TrawlError(f"the tide never went out: {_steps(self.max_steps)} and still going")
             # The sea is deterministic: if a loop comes back to the exact same stack and
             # seabed, it will repeat forever. Proof, not a guess. The picture holds
             # everything a pass can see: `echo` remembers past looks and `wave` reads the

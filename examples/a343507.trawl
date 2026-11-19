@@ -143,4 +143,5 @@
     window scan
     -7 dig -4 dig + -7 bury
     -18 dig 0 =  -7 dig -2 dig 64 + > 0 =  * ] drop
+  -18 dig -2 dig > if 0 -18 bury then
   -18 dig ;

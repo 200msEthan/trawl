@@ -156,7 +156,7 @@ def test_pearls(engine):
 # ---------------------------------------------------------------- errors
 
 @pytest.mark.parametrize("src,msg", [
-    ("+", "the tide went out too far: `+` wanted 2 numbers, the shore was empty"),
+    ("+", "the tide went out too far: `+` wanted 2 numbers, but the shore ran out"),
     ("1 rot", "`rot` wanted 3 numbers"),
     ("dup", "`dup` wanted 1 number,"),
     ("7 0 /", "you tried to split 7 into zero pieces. the ocean refuses."),
@@ -211,6 +211,14 @@ def test_interpreter_proves_stuck_loops(src):
 def test_step_limit():
     with pytest.raises(TrawlError, match="the tide never went out"):
         interp("1 [ dup 1 + swap drop ]", max_steps=10_000)
+
+
+# An empty loop over a big stack is too big for the stuck proof and ran no steps, so it
+# hung forever instead of hitting the step limit (round 5 cold read).
+@pytest.mark.parametrize("src", ["1 " * 300 + "[ ]", "1 300 [ dup dup bury 1 - ] drop 1 [ ]"])
+def test_empty_loop_hits_the_step_limit(src):
+    with pytest.raises(TrawlError, match="the tide never went out"):
+        interp(src, max_steps=10_000)
 
 
 @needs_cc
@@ -580,6 +588,15 @@ def test_a343507_reproduces_the_published_terms(native):
     path = ROOT / "examples" / "a343507.trawl"
     src = path.read_text(encoding="utf-8") + "\n2 0 1000 search . 3 0 10000 search . 4 0 10000 search . 5 0 1000000 search . 6 0 10000000 search ."
     assert native(src, str(path)) == "208 3475 8174 252965 3648835 \n"
+
+
+# The search works in whole windows, so it found answers past END and gave them back
+# (`2 0 100 search` said 208). An answer past END means none in (START, END]: 0.
+@needs_cc
+def test_a343507_search_stays_inside_its_range(native):
+    path = ROOT / "examples" / "a343507.trawl"
+    src = path.read_text(encoding="utf-8") + "\n1 0 4 search . 2 0 100 search . 2 0 208 search . 2 207 300 search ."
+    assert native(src, str(path)) == "0 0 208 208 \n"
 
 
 ERDOS = ROOT / "examples" / "erdos727"

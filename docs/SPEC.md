@@ -209,7 +209,7 @@ interpreter (`trawl run`) always runs sweeps in order, on one core.
 Errors stop the program and print one line starting with `~`. The wording is part of the
 language and the same in both engines, for example:
 
-- `the tide went out too far: `+` wanted 2 numbers, the shore was empty`
+- `the tide went out too far: `+` wanted 2 numbers, but the shore ran out`
 - `you tried to split 7 into zero pieces. the ocean refuses.`
 - `base 1 has no digits. try 2 or more.`
 - `tide numbers are whole: 2 to the power -1 would be a fraction`
