@@ -455,7 +455,7 @@ def _deep(fn, on_interrupt=None):
     import threading
     if getattr(_deep, "inside", False):
         return fn()
-    box = {}
+    box, done = {}, threading.Event()
 
     def work():  # only this thread has the big stack, so only it gets the high frame limit
         _deep.inside, limit = True, sys.getrecursionlimit()
@@ -467,6 +467,7 @@ def _deep(fn, on_interrupt=None):
         finally:
             _deep.inside = False
             sys.setrecursionlimit(limit)
+            done.set()
     try:
         old = threading.stack_size(_DEEP_STACK)
     except (ValueError, RuntimeError):  # no big stacks here: run as is
@@ -478,15 +479,19 @@ def _deep(fn, on_interrupt=None):
         return fn()
     finally:
         threading.stack_size(old)
+    import time
     stopped = False
-    while t.is_alive():
+    # short sleeps, so Ctrl+C still reaches this thread. (Not t.join: on Python 3.10 a Ctrl+C inside join can
+    # leave the thread looking finished while it still runs.)
+    while not done.is_set():
         try:
-            t.join(0.2)  # a short wait, so Ctrl+C still reaches the main thread
+            time.sleep(0.05)
         except KeyboardInterrupt:
             if on_interrupt is None:
                 raise
             on_interrupt()
             stopped = True
+    t.join()
     if stopped:
         raise KeyboardInterrupt
     if "error" in box:
