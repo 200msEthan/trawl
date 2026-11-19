@@ -58,7 +58,7 @@ effects are written `( before -- after )`, top of the stack on the right.
 | `+ - *` | `( a b -- a+b )`, `( a b -- a-b )`, `( a b -- a*b )` |
 | `/ %` | `( a b -- floor(a/b) )`, `( a b -- a mod b )` |
 | `= < >` | `( a b -- flag )` |
-| `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1). An answer over 2^34 bits (about 5 billion digits) is refused |
+| `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1). An answer that is surely over 2^34 bits (about 5 billion digits) is refused; the check counts the base's bits roughly, so one up to twice that size may still be tried and run out of memory |
 | `prime` | `( n -- flag )` 1 if `n` is prime, else 0 (0 for `n < 2`). Exact below 3317044064679887385961981 ≈ 3.3·10^24 (strong probable-prime tests to the first 13 primes, which no composite below that passes; that number is the first one that does). From there up it tests to the first 20 primes, so that number is caught, but it is a probable-prime test: right for any number you're likely to meet, though a composite built on purpose to fool all 20 tests would pass |
 | `spf` | `( n -- p )` the smallest prime factor of `n` (`n >= 2`; `n` itself when `n` is prime, by the same test as `prime`). Fast when `n` has a small prime factor; a number whose two smallest prime factors both have 15 or more digits takes seconds, and 20 or more digits can take a very long time |
 | `factorings` | `( n -- count )` how many ways `n` is a product of whole numbers above 1, order ignored (OEIS A001055; `n >= 1`, and `1 factorings` is 1). `12 factorings` is 4: 12, 2·6, 3·4, 2·2·3. It factors `n` (as `spf` does) and counts from the exponents alone, remembering every exponent pattern it has counted. Exact for any size; slow when `n` has many distinct prime factors with large exponents |
@@ -240,7 +240,7 @@ They also differ in a few edges that don't change any correct program's output:
 - Seabed addresses must be smaller than 2^62 in size.
 - Words calling words: both engines stop with `the sea got too deep` thousands of levels
   down (the native build at exactly 25,000; the interpreter's limit depends on the words:
-  about 25,000 to 40,000 for plain words, nearer 16,000 for words full of nested `if`s or loops).
+  about 25,000 to 40,000 for plain words, as few as about 16,000 for long words full of `if`s or loops).
 - A word with loops nested hundreds deep takes the C compiler a long time (seconds to minutes)
   to build; the interpreter starts it at once.
 

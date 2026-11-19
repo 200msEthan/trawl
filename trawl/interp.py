@@ -426,6 +426,7 @@ def pearl_shape_error(name, n, got):
 
 
 def sweep_shape_error(name, n, got):
+    got = max(got, 0)  # it ate numbers below n too: it still left none in n's place
     return (f"`sweep {name}` wants `{name}` to turn each n into one answer, "
             f"but at n = {n} it left {got} number{'s' if got != 1 else ''} in its place")
 

@@ -1292,3 +1292,44 @@ def test_native_run_says_when_its_output_is_lost(native, tmp_path):
 def test_odd_characters_in_words(native, src):
     want, got = both(native, src)
     assert want.startswith("~") and "\x00" not in want and got == want  # 0-9 only are digits; a NUL is shown as \x00
+
+
+# ---- round 5 of the blind cold reads
+
+def test_outputs_dont_replace_look_alikes(native, tmp_path):
+    prog = tmp_path / "s.trawl"
+    prog.write_text("1 .", encoding="utf-8")
+    pkg = tmp_path / "package.json"
+    pkg.write_text('{"name": "my precious package"}', encoding="utf-8")
+    r = trawl_cli("run", str(prog), "--receipt", str(pkg))
+    assert r.returncode != 0 and "isn't a Trawl receipt" in r.stderr, r.stderr
+    tool = tmp_path / ("mytool" + (".exe" if os.name == "nt" else ""))
+    shutil.copy(sys.executable, tool)  # somebody else's program
+    r = trawl_cli("build", str(prog), "-o", str(tool))
+    assert r.returncode != 0 and "isn't a program Trawl built" in r.stderr, r.stderr
+    assert pkg.read_text(encoding="utf-8") == '{"name": "my precious package"}'
+
+
+@pytest.mark.skipif(os.name == "nt", reason="SIGPIPE is POSIX")
+def test_native_run_into_head_exits_quietly(native, tmp_path):
+    prog = tmp_path / "inf.trawl"
+    prog.write_text("1 [ 1 + dup . ]", encoding="utf-8")
+    p = subprocess.Popen([sys.executable, "-m", "trawl", "fast", str(prog)], stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, cwd=ROOT)
+    p.stdout.read(20)
+    p.stdout.close()
+    assert p.wait(timeout=60) == 0, p.stderr.read()
+
+
+def test_circular_use_names_the_use_that_closes_it(tmp_path):
+    (tmp_path / "a.trawl").write_text("use b 1 .", encoding="utf-8")
+    (tmp_path / "b.trawl").write_text("1 .\nuse a", encoding="utf-8")
+    prog = tmp_path / "m.trawl"
+    prog.write_text("use a", encoding="utf-8")
+    with pytest.raises(TrawlError, match=r"b\.trawl:2: libraries keep using each other in a circle \(a\.trawl -> b\.trawl -> a\.trawl\)"):
+        parse(prog.read_text(encoding="utf-8"), str(prog))
+
+
+def test_sweep_shape_never_says_minus_one(native):
+    want, got = both(native, ": z drop drop ; 5 1 3 sweep z")
+    assert "it left 0 numbers" in want and got == want
