@@ -421,7 +421,7 @@ def uses_worlds(prog):
 # `trawl run` near 330 levels while `trawl fast` went millions deep. So a run gets its own
 # thread with a big stack and a high frame limit; past that, a plain `~` error, not a traceback.
 DEEP_FRAMES = 200_000
-_DEEP_STACK = 512 * 1024 * 1024
+_DEEP_STACK = 256 * 1024 * 1024  # the most Windows allows a thread
 
 
 def _deep(fn):
