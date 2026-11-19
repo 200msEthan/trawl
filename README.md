@@ -29,7 +29,7 @@ $ trawl run rivers.trawl
 Or skip the install: download [playground/index.html](playground/index.html) and open it in a browser. It runs Trawl right in the page (it fetches Python for the browser, Pyodide, the first time, so it needs the internet).
 You need Python 3.10 or newer, and gcc or clang for `trawl fast` and `trawl build`
 (on Windows: [w64devkit](https://github.com/skeeto/w64devkit) or MSYS2). Typing `trawl`
-alone opens an interactive prompt.
+alone in a terminal opens an interactive prompt (`trawl repl` does the same anywhere).
 
 ## Where it came from: Erdős problem 727
 
@@ -153,7 +153,7 @@ trawl verify hunt.receipt --save hunt.sav --sample 8
 This re-runs 8 random blocks of every sweep on the interpreter and checks them against
 the saved ones. Every other block is replayed from the save file, and the whole output must
 still match the receipt. A spot check is evidence, not proof: it catches a wrong block only
-if it happens to pick it.
+if it happens to pick it, and verify says how many of the blocks it really re-ran.
 
 A re-run takes about as long as the first run did, and verify says how long that was. While
 it works, and whenever `trawl run` or `trawl fast` goes quiet for more than a second, the

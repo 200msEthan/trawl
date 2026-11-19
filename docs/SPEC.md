@@ -58,7 +58,7 @@ effects are written `( before -- after )`, top of the stack on the right.
 | `+ - *` | `( a b -- a+b )`, `( a b -- a-b )`, `( a b -- a*b )` |
 | `/ %` | `( a b -- floor(a/b) )`, `( a b -- a mod b )` |
 | `= < >` | `( a b -- flag )` |
-| `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1) |
+| `power` | `( a k -- a^k )`, `k >= 0` (`0 0 power` is 1). An answer over 2^34 bits (about 5 billion digits) is refused |
 | `prime` | `( n -- flag )` 1 if `n` is prime, else 0 (0 for `n < 2`). Exact below 3317044064679887385961981 ≈ 3.3·10^24 (strong probable-prime tests to the first 13 primes, which no composite below that passes; that number is the first one that does). From there up it tests to the first 20 primes, so that number is caught, but it is a probable-prime test: right for any number you're likely to meet, though a composite built on purpose to fool all 20 tests would pass |
 | `spf` | `( n -- p )` the smallest prime factor of `n` (`n >= 2`; `n` itself when `n` is prime, by the same test as `prime`). Fast up to about 10^30; a number whose two smallest prime factors both have 20 or more digits can take a very long time |
 | `factorings` | `( n -- count )` how many ways `n` is a product of whole numbers above 1, order ignored (OEIS A001055; `n >= 1`, and `1 factorings` is 1). `12 factorings` is 4: 12, 2·6, 3·4, 2·2·3. It factors `n` (as `spf` does) and counts from the exponents alone, remembering every exponent pattern it has counted. Exact for any size; slow when `n` has many distinct prime factors with large exponents |
@@ -134,7 +134,7 @@ fixed addresses inside loops are kept in CPU registers.
 
 | Word | Effect | |
 |---|---|---|
-| `echo` | `( lo hi -- k )` | look at seabed cells `lo..hi`. If they have looked exactly like this at an earlier `echo`, push how many echoes ago that was (the length of the loop); otherwise push 0. Either way, remember this picture. |
+| `echo` | `( lo hi -- k )` | look at seabed cells `lo..hi`. If they have looked exactly like this at an earlier `echo`, push how many echoes ago that was (the length of the loop); otherwise push 0. Either way, remember this picture. At most 16777216 cells at once. |
 | `hush` | `( -- )` | forget every picture |
 
 With `echo`, a program can find for itself when a system (a reef, a deck, a ferry) starts
@@ -163,7 +163,7 @@ stops with an error.
 ## 12. Pearls: remembered answers
 
 `pearl name` makes the word `name` remember answers. A pearled word must take one number
-and leave one; after `pearl name`, asking it the same number again gives the remembered
+and leave one (a run stops with an error the first time it doesn't); after `pearl name`, asking it the same number again gives the remembered
 answer without running it. Pearls work through recursion, so
 `: fib dup 2 < if else dup 1 - fib swap 2 - fib + then ; pearl fib` makes `90 fib` instant.
 
@@ -190,10 +190,12 @@ engine can share them out and pick them up again:
 - **`--save FILE`** writes each finished block (its count and its printed words) to FILE.
   Stop the run at any point and start the same command again: finished blocks are replayed
   from FILE, and only the rest are run. FILE only resumes the program that wrote it; a changed
-  program starts over (and says so).
+  program starts over (and says so). Each block carries a check of its own, so a block
+  damaged on disk runs again, along with every block after it. `--save` never writes over a
+  file that isn't a Trawl save file.
 
-**The rule that makes this safe:** a block's changes to the seabed, to pearls and to what
-`echo` remembers stay in its own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
+**The rule that makes this safe:** a block's changes to the seabed, to pearls, to what
+`echo` remembers and to the words it defines stay in its own copy of the sea. They may or may not be seen by later calls, or after the sweep. So a
 swept word should set every seabed cell it reads before it reads it. Scratch cells are fine;
 a running total kept in the seabed across calls is not (use the count, or print the finds).
 
@@ -211,6 +213,8 @@ language and the same in both engines, for example:
 - `you tried to split 7 into zero pieces. the ocean refuses.`
 - `base 1 has no digits. try 2 or more.`
 - `tide numbers are whole: 2 to the power -1 would be a fraction`
+- `that power is too big for the sea to hold`
+- `the sea ran out of memory`
 - `nobody in the sea knows the word `flod`. did you mean `fold`?`
 - `` `sweep two` wants `two` to turn each n into one answer, but at n = 1 it left 2 numbers in its place``
 - `the tide is stuck: this loop came back to the exact same sea [...], so it can never end` (interpreter only, see below)
@@ -233,11 +237,12 @@ language and the same in both engines, for example:
 They also differ in a few edges that don't change any correct program's output:
 
 - Output is printed as the program runs (the interpreter in worlds mode collects it).
-- Unknown words are reported before the program starts, not when they are reached.
 - Seabed addresses must be smaller than 2^62 in size.
-- Words calling words: both engines stop with `the sea got too deep` about 25,000 levels
-  down (the native build at exactly 25,000; the interpreter's limit depends on the words,
-  somewhere between about 25,000 and 40,000).
+- Words calling words: both engines stop with `the sea got too deep` thousands of levels
+  down (the native build at exactly 25,000; the interpreter's limit depends on the words:
+  about 25,000 to 40,000 for plain words, nearer 16,000 for words full of nested `if`s or loops).
+- A word with loops nested hundreds deep takes the C compiler a long time (seconds to minutes)
+  to build; the interpreter starts it at once.
 
 Without the stuck-loop check and the step limit, a stuck loop makes a native build run forever, so
 try a new program on `trawl run` first. Everything else (results, printed text, error

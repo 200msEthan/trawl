@@ -203,21 +203,21 @@ class Gen:
         out = []
         for n in body:
             if isinstance(n, Word):
-                out.append(n.name)
+                out.append(n.name + "@" + where(n.tok))  # where it is matters: an unknown word's error names its line
             elif isinstance(n, Num):
                 out.append(str(n.value))
             elif isinstance(n, Text):
                 out.append("\x00." + n.text + "\x00")  # never the same as a word's name
             elif isinstance(n, Loop):
-                out.append("[" + self.shape(n.body) + "]")
+                out.append("\x00[ " + self.shape(n.body) + " \x00]")  # never the same as a word like `[x]`
             elif isinstance(n, If):
-                out.append("if(" + self.shape(n.then) + "|" + (self.shape(n.other) if n.other is not None else "") + ")")
+                out.append("\x00if( " + self.shape(n.then) + " \x00| " + (self.shape(n.other) if n.other is not None else "") + " \x00)")
             elif isinstance(n, Def):
-                out.append(":" + n.name + "(" + self.shape(n.body) + ")")
+                out.append("\x00: " + n.name + " \x00( " + self.shape(n.body) + " \x00)")
             elif isinstance(n, PearlDecl):
-                out.append("pearl " + n.name)
+                out.append("\x00pearl " + n.name)
             elif isinstance(n, Sweep):
-                out.append("sweep " + n.name)
+                out.append("\x00sweep " + n.name + "@" + where(n.tok))
         return " ".join(out)
 
     def fn_name(self, i):
@@ -429,8 +429,7 @@ class Gen:
             f.flush()
             f.emit("}")
         else:
-            msg = self.unknown(node, "." + suggest(t, set(self.by_name) - {t}))
-            f.emit(f"default: rt_die(\"%s\", {c_string(msg)});")
+            f.emit(f"default: {self.die_unknown(node)}")
         f.emit("}")
         f.reload()
         f.known = 0
@@ -451,10 +450,25 @@ class Gen:
             for j in (self.by_name[t] if t not in self.varied else [i]):
                 f.emit(f"case {j}: fp = {self.fn_name(i)}; break;")
         f.emit("}")
+        if len(self.by_name[t]) > 1:
+            # the word can be defined again while the sweep runs: look it up for every n, as the interpreter does
+            f.emit(f"if (fp) fp = {self.sweep_caller(t)};")
         f.emit(f"if (!fp) {{ if (sp < 2) rt_underflow(\"sweep\", 2); rt_die(\"%s\", {c_string(msg)}); }}")
         f.emit(f"sp = rt_sweep({pid}, fp, {c_string(t)}, sp); }}")
         f.reload()
         f.known = 0
+
+    def sweep_caller(self, t):
+        """A function that calls t's meaning at the moment of each call."""
+        if t not in self.sweep_callers:
+            name = f"sweepcall{len(self.sweep_callers)}_{c_name(t)}"
+            lines = [f"static long {name}(long sp) {{", f"  switch ({self.state(t)}) {{"]
+            for i in self.meanings(t):
+                for j in (self.by_name[t] if t not in self.varied else [i]):
+                    lines.append(f"  case {j}: return {self.fn_name(i)}(sp);")
+            lines += ["  }", "  return sp;", "}"]
+            self.sweep_callers[t] = (name, lines)
+        return self.sweep_callers[t][0]
 
     # -- calling your own words. The interpreter looks a word up when the call happens, so a
     # word can be defined late, defined again, defined inside another word or inside an `if`.
@@ -465,6 +479,24 @@ class Gen:
     def unknown(self, node, extra=""):
         t = node.name
         return f"{where(node.tok)}: nobody in the sea knows the word `{t}`{extra}"
+
+    def die_unknown(self, node):
+        """C that stops with the interpreter's message, whose "did you mean" names only a builtin or a word
+        defined at the moment of the call: the best match among those is picked when the call happens."""
+        import difflib
+        t = node.name
+        if t.startswith("#"):  # the hint about comments, not a near name
+            return f'rt_die("%s", {c_string(self.unknown(node, "." + suggest(t, ())))});'
+        ranked = difflib.get_close_matches(t, list(BUILTINS) + sorted(set(self.by_name) - {t}), 1 << 20, 0.6)
+        code = []
+        for name in ranked:
+            msg = c_string(self.unknown(node, f". did you mean `{name}`?"))
+            if name in BUILTINS:  # always there: the search stops here
+                code.append(f'rt_die("%s", {msg});')
+                return " else ".join(code)
+            code.append(f'if ({self.state(name)} >= 0) rt_die("%s", {msg});')
+        code.append(f'rt_die("%s", {c_string(self.unknown(node, "."))});')
+        return " else ".join(code)
 
     def meanings(self, name):
         """The definitions a call to name can land on (all of them for a word defined differently twice)."""
@@ -494,8 +526,7 @@ class Gen:
             return
         if not sure:
             f.flush()
-            msg = self.unknown(node, "." + suggest(t, set(self.by_name) - {t}))
-            f.emit(f"if (UNLIKELY({self.state(t)} < 0)) rt_die(\"%s\", {c_string(msg)});")
+            f.emit(f"if (UNLIKELY({self.state(t)} < 0)) {{ {self.die_unknown(node)} }}")
         if self.inline[target]:
             self.body(f, self.prog.defs[target].body, target + 1, False)
         else:
@@ -593,7 +624,9 @@ class Gen:
         elif t == "worlds":
             f.push(f.temp("MKV(sunk)"))
         else:
-            raise TrawlError(f"{where(node.tok)}: nobody in the sea knows the word `{t}`.{suggest(t, self.by_name)}")
+            # a word defined nowhere: the run stops when it gets here, after printing what came before
+            f.flush()
+            f.emit(self.die_unknown(node))
 
     def pearl_scan(self, nodes):
         for n in nodes:
@@ -625,7 +658,7 @@ class Gen:
     def generate(self):
         from .interp import uses_worlds
         self.worlds = uses_worlds(self.prog)  # the same test as the interpreter: a world word anywhere
-        self.pearl_names, self.sweep_names = set(), set()
+        self.pearl_names, self.sweep_names, self.sweep_callers = set(), set(), {}
         self.pearl_scan(self.prog.body)
         for d in self.prog.defs:
             self.pearl_scan(d.body)
@@ -662,6 +695,8 @@ class Gen:
                f"static V K[{max(1, len(self.consts))}];"]
         out += [f"static int cur{self.by_name[name][0]} = -1;" for name in sorted(self.by_name)]
         out += [f"static long {name}(long sp);" for name, _ in funcs]
+        for _, lines in self.sweep_callers.values():
+            out += lines
         for name, lines in funcs:
             out.append(f"static long {name}(long sp) {{")
             out += self.render(lines)

@@ -427,7 +427,7 @@ function pingSound() {
 }
 const soundBtn = document.getElementById("sound");
 function updateSoundButton() {
-  soundBtn.textContent = !soundOn ? "Sound off" : audio ? "Sound on" : "Sound";
+  soundBtn.textContent = soundOn ? "Sound on" : "Sound off";
   soundBtn.setAttribute("aria-pressed", String(soundOn && !!audio));
 }
 soundBtn.addEventListener("click", () => {
@@ -482,6 +482,16 @@ function addCatch(line, label) {
   const m = line.match(CATCH);
   if (!m) return false;
   const n = m[1];
+  // a card holds a readable line; a giant one (a loop printing without newlines) is cut, the output keeps it all
+  // (a very long number counts as one short word here: the card already shortens it)
+  if (line.length > 600) {
+    let room = 600, cut = 0;
+    for (const m of line.matchAll(/\S+\s*/g)) {
+      room -= /^-?\d{25,}\s*$/.test(m[0]) ? 16 : m[0].length;
+      if (room < 0) { cut = m.index; break; }
+    }
+    if (cut) line = line.slice(0, cut) + " … (cut here: the whole line is in the output below)";
+  }
   if (!label) setCount(count + 1);
   const li = document.createElement("li"); li.className = "catch fresh" + (label ? " find" : "");
   const num = document.createElement("span"); num.className = "num" + (n.length > 12 ? " long" : "");
@@ -733,7 +743,7 @@ function renderKnobs(ex) {
     range.addEventListener("input", () => set(+range.value));
     less.addEventListener("click", () => set(+range.value - step, true));
     more.addEventListener("click", () => set(+range.value + step, true));
-    outEl.textContent = Number(m[1]).toLocaleString("en-US");
+    outEl.textContent = BigInt(m[1]).toLocaleString("en-US");
     box.append(row); knobs.push(k);
   }
 }
@@ -761,7 +771,7 @@ function syncKnobs() { // the code was edited by hand: show its numbers, or hide
   for (const k of knobs) {
     const m = code.value.match(k.re);
     k.row.hidden = !m;
-    if (m) { k.range.value = m[1]; k.outEl.textContent = Number(m[1]).toLocaleString("en-US"); }
+    if (m) { k.range.value = m[1]; k.outEl.textContent = BigInt(m[1]).toLocaleString("en-US"); }
   }
 }
 // changing a number never starts a hunt by itself (it used to restart on every step of a slider):

@@ -216,6 +216,16 @@ async function consistent(p, id, label, fingerprint) {
   expect(!(await c.isVisible("#callout")), "curse: the Still hunting note is off the screen when the long hunt is done");
   await consistent(c, "curse", "after a long curse hunt");
 
+  // a number too big for the slider shows exactly on the knob, not rounded
+  await c.$eval("#code", (t) => { t.value = t.value.replace(/: top \d+ ;/, ": top 99999999999999999999999 ;"); t.dispatchEvent(new Event("input")); });
+  expect(await c.$eval("#knobs output", (o) => o.textContent) === "99,999,999,999,999,999,999,999", "curse: a huge number shows exactly on its knob");
+  // one giant line (a loop printing without newlines) makes a small card; the output keeps it all
+  await c.evaluate(() => { finishLine(); addCatch("7 " + "8 ".repeat(50000)); });
+  const card = await c.$eval("#catches .catch", (li) => ({ len: li.textContent.length, h: li.getBoundingClientRect().height }));
+  expect(card.len < 800 && card.h < 300, `a giant line makes a small card (${JSON.stringify(card)})`);
+  // the Sound button says what it is set to, before and after a run
+  expect(/^Sound (on|off)$/.test(await c.$eval("#sound", (b) => b.textContent)), "Sound button says on or off");
+
   await browser.close();
   if (failures) { console.log(`${failures} of ${checks} checks failed`); process.exit(1); }
   console.log(`ok: ${checks} checks`);

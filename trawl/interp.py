@@ -16,6 +16,11 @@ from .lang import (Def, If, Loop, Num, PearlDecl, Program, Sweep, Text, TrawlErr
                    parse, suggest)
 
 
+def _steps(n):
+    if n >= 1_000_000 and n % 1_000_000 == 0:
+        return f"{n // 1_000_000:,} million steps"
+    return f"{n:,} steps"
+
 class Sink(Exception):
     """This world is wrong. Rewind."""
 
@@ -72,7 +77,7 @@ class Sea:
         for node in body:
             self.steps += 1
             if self.steps > self.max_steps:
-                raise TrawlError(f"the tide never went out: {self.max_steps // 1_000_000} million steps and still going")
+                raise TrawlError(f"the tide never went out: {_steps(self.max_steps)} and still going")
             k = type(node)
             if k is Num:
                 st.append(node.value)
@@ -162,9 +167,12 @@ class Sea:
                 if n in shell:
                     st.append(shell[n])
                 else:
+                    base = len(st)
                     st.append(n)
                     self.exec(self.words[t])
-                    shell[n] = st[-1] if st else self.pop(t)
+                    if len(st) != base + 1:
+                        raise TrawlError(pearl_shape_error(t, n, len(st) - base))
+                    shell[n] = st[-1]
                     self.defined += 1  # a remembered answer skips the word next time: the sea changed
             else:
                 self.exec(self.words[t])
@@ -238,11 +246,14 @@ class Sea:
             k, a = self.pop(t, 2), self.pop(t, 2)
             if k < 0:
                 raise TrawlError(f"tide numbers are whole: {a} to the power {k} would be a fraction")
-            if k >= 1 << 62 and a not in (0, 1, -1):  # 2^62 bits or more: no computer can hold it
+            # more than 2^34 bits (about 5 billion digits): too big to work with, so refuse it
+            if a not in (0, 1, -1) and k > (1 << 34) // (abs(a).bit_length() - 1):
                 raise TrawlError("that power is too big for the sea to hold")
             st.append(a ** k)
         elif t == "echo":
             hi, lo = self.pop(t, 2), self.pop(t, 2)
+            if hi - lo + 1 > 1 << 24:
+                raise TrawlError(f"echo can look at 16777216 seabed cells at most, not {hi - lo + 1}")
             key = tuple(self.bed.get(a, 0) for a in range(lo, hi + 1))
             st.append(self.echo_n - self.echoes[key] if key in self.echoes else 0)
             self.echoes[key] = self.echo_n
@@ -406,6 +417,12 @@ def check_sweep_range(lo, hi):
         raise TrawlError(f"`sweep` runs from {lo} up to {hi}, but both ends must lie between -2^62 and 2^62 - 1")
 
 
+def pearl_shape_error(name, n, got):
+    got = max(got, 0)
+    return (f"`{name}` is a pearl, so it has to turn each n into one answer, but at n = {n} "
+            f"it left {got} number{'' if got == 1 else 's'} in its place")
+
+
 def sweep_shape_error(name, n, got):
     return (f"`sweep {name}` wants `{name}` to turn each n into one answer, "
             f"but at n = {n} it left {got} number{'s' if got != 1 else ''} in its place")
@@ -426,12 +443,15 @@ def uses_worlds(prog):
 # Words calling words nest Python calls, and Python's default limit (1000 frames) stopped
 # `trawl run` near 330 levels while `trawl fast` went millions deep. So a run gets its own
 # thread with a big stack and a high frame limit; past that, a plain `~` error, not a traceback.
+NO_MEMORY = "the sea ran out of memory"
 TOO_DEEP = "the sea got too deep: words called inside words too many levels down. does a word call itself forever?"
 DEEP_FRAMES = 100_000
 _DEEP_STACK = 255 * 1024 * 1024  # Windows wants a thread's stack below 256 MB
 
 
-def _deep(fn):
+def _deep(fn, on_interrupt=None):
+    """Run fn on a thread with a big stack. With on_interrupt, Ctrl+C calls it (it should make fn stop soon),
+    waits for fn to finish, then raises KeyboardInterrupt."""
     import threading
     if getattr(_deep, "inside", False):
         return fn()
@@ -458,8 +478,17 @@ def _deep(fn):
         return fn()
     finally:
         threading.stack_size(old)
+    stopped = False
     while t.is_alive():
-        t.join(0.2)  # a short wait, so Ctrl+C still reaches the main thread
+        try:
+            t.join(0.2)  # a short wait, so Ctrl+C still reaches the main thread
+        except KeyboardInterrupt:
+            if on_interrupt is None:
+                raise
+            on_interrupt()
+            stopped = True
+    if stopped:
+        raise KeyboardInterrupt
     if "error" in box:
         raise box["error"]
     return box["value"]
@@ -470,6 +499,8 @@ def _too_deep(fn):
         return fn()
     except RecursionError:
         raise TrawlError(TOO_DEEP) from None
+    except MemoryError:
+        raise TrawlError(NO_MEMORY) from None
 
 
 def run(prog, max_steps=50_000_000, max_worlds=2_000_000, stream=None, plan=None):

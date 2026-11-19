@@ -71,6 +71,15 @@ static void rt_die(const char *fmt, ...) {
   exit(1);
 }
 
+/* Every allocation from here on is checked: a sea too big for memory stops with a message, never a crash. */
+#define RT_NO_MEMORY "the sea ran out of memory"
+static void *rt_malloc(size_t n) { void *p = malloc(n); if (!p && n) rt_die(RT_NO_MEMORY); return p; }
+static void *rt_calloc(size_t n, size_t k) { void *p = calloc(n, k); if (!p && n && k) rt_die(RT_NO_MEMORY); return p; }
+static void *rt_realloc(void *q, size_t n) { void *p = realloc(q, n); if (!p && n) rt_die(RT_NO_MEMORY); return p; }
+#define malloc(n) rt_malloc(n)
+#define calloc(n, k) rt_calloc(n, k)
+#define realloc(q, n) rt_realloc(q, n)
+
 /* Words calling words: about as deep as the interpreter goes, then the same message (a C stack
  * that overflowed would just crash). The build gives the program a stack big enough for it. */
 #define RT_MAX_DEPTH 25000
@@ -100,7 +109,7 @@ static V big_alloc_from(int sign, const limb *d, int n, int permanent) {
   }
   size_t bytes = sizeof(Big) + sizeof(limb) * (size_t)n;
   Big *b = (Big *)malloc(bytes);
-  if (!b) rt_die("the sea ran out of room for a %d-digit number", n * 10);
+  if (!b) rt_die(RT_NO_MEMORY);
   b->sign = sign; b->n = n; memcpy(b->d, d, sizeof(limb) * (size_t)n);
   b->mark = permanent ? 2 : 0;
   b->next = big_list; big_list = b; big_bytes += bytes;
@@ -297,7 +306,7 @@ static V big_div_small_r(V a, int64_t y, int64_t *rem) { /* a > 0 big, 0 < y < 2
   Big *b = BIGP(a);
   size_t bytes = sizeof(Big) + sizeof(limb) * (size_t)b->n;
   Big *q = (Big *)malloc(bytes);
-  if (!q) rt_die("the sea ran out of room for a %d-digit number", b->n * 10);
+  if (!q) rt_die(RT_NO_MEMORY);
   *rem = (int64_t)mag_divsmall(q->d, b->d, b->n, (limb)y);
   int n = mag_norm(q->d, b->n);
   if (n <= 2) { V v = big_alloc_from(1, q->d, n, 0); free(q); return v; }
@@ -343,6 +352,12 @@ static V v_power(V a, V k) {
     rt_die("that power is too big for the sea to hold");
   }
   int64_t e = SMALLN(k);
+  if (a != MKV(0) && a != MKV(1) && a != MKV(-1)) { /* more than 2^34 bits (5 billion digits): refuse, as run does */
+    int64_t bits;
+    if (ISSMALL(a)) { int64_t m = SMALLN(a); uint64_t u = m < 0 ? (uint64_t)0 - (uint64_t)m : (uint64_t)m; bits = 0; while (u) { bits++; u >>= 1; } }
+    else { Big *b = BIGP(a); limb top = b->d[b->n - 1]; bits = (int64_t)(b->n - 1) * 32; while (top) { bits++; top >>= 1; } }
+    if (e > ((int64_t)1 << 34) / (bits - 1)) rt_die("that power is too big for the sea to hold");
+  }
   V result = MKV(1), base = a;
   while (e > 0) {
     if (e & 1) result = v_mul(result, base);
@@ -664,7 +679,11 @@ static void f_put(const int *e, int k, uint64_t h, V val) {
 }
 static int i_gcd(int a, int b) { while (b) { int t = a % b; a = b; b = t; } return a; }
 static void i_sort_desc(int *r, int n) { for (int i = 1; i < n; i++) { int x = r[i], j = i; while (j && r[j - 1] < x) { r[j] = r[j - 1]; j--; } r[j] = x; } }
-static int64_t f_binom(int n, int k) { int64_t b = 1; for (int i = 1; i <= k; i++) b = b * (n - k + i) / i; return b; }
+static V f_binom(int n, int k) { /* exact at any size: 63 equal exponents already pass 2^62 */
+  V b = MKV(1);
+  for (int i = 1; i <= k; i++) b = v_div(v_mul(b, MKV(n - k + i)), MKV(i));
+  return b;
+}
 static V f_count(const int *v, int k);
 /* Positions with equal exponents are interchangeable (except the first, whose part w[0]
    enters c(w)), so each group of m equal exponents a is handled as a multiset: how many of
@@ -694,7 +713,7 @@ static void f_walk(FCtx *x, int j, int o, int t, int left, V weight) {
   }
   for (int c = 0; c <= left; c++) {
     x->cnt[o + t] = c;
-    f_walk(x, j, o, t + 1, left - c, c ? v_mul(weight, MKV(f_binom(left, c))) : weight);
+    f_walk(x, j, o, t + 1, left - c, c ? v_mul(weight, f_binom(left, c)) : weight);
   }
   x->cnt[o + t] = 0;
 }
@@ -942,6 +961,7 @@ static void echo_insert(uint64_t h, V *vals, int64_t len, int64_t when) {
 /* lo hi echo: has the seabed from lo to hi looked exactly like this before? */
 static V rt_echo(V lo, V hi) {
   int64_t a = rt_addr(lo), b = rt_addr(hi), len = b >= a ? b - a + 1 : 0;
+  if (len > ((int64_t)1 << 24)) rt_die("echo can look at 16777216 seabed cells at most, not %lld", (long long)len);
   V *vals = (V *)malloc(sizeof(V) * (size_t)(len ? len : 1));
   uint64_t h = 0x1234567ULL + (uint64_t)len;
   for (int64_t i = 0; i < len; i++) { vals[i] = rt_dig(MKV(a + i)); h = mix64(h ^ v_hash(vals[i])); }
@@ -987,9 +1007,14 @@ static void shell_put(Shell *s, V k, V v) {
     free(old);
   }
   uint64_t i = v_hash(k) & (uint64_t)(s->cap - 1);
-  while (s->t[i].full) i = (i + 1) & (uint64_t)(s->cap - 1);
+  while (s->t[i].full) {
+    if (v_eq(s->t[i].key, k) == VTRUE) { s->t[i].val = v; return; } /* asked again inside itself: the last answer wins */
+    i = (i + 1) & (uint64_t)(s->cap - 1);
+  }
   s->t[i].full = 1; s->t[i].key = k; s->t[i].val = v; s->n++;
 }
+/* the numbers pearled words are working on right now: the collector must keep them while the word runs */
+static V *pearl_wip = NULL; static long pearl_wip_n = 0, pearl_wip_cap = 0;
 typedef long (*WordFn)(long);
 static long rt_call_pearl(int id, WordFn fn, const char *name, long sp) {
   Shell *s = &shells[id];
@@ -998,8 +1023,21 @@ static long rt_call_pearl(int id, WordFn fn, const char *name, long sp) {
   V n = S[sp - 1];
   Pearl *p = shell_find(s, n, v_hash(n));
   if (p) { S[sp - 1] = p->val; return sp; }
+  long base = sp - 1;
+  if (pearl_wip_n == pearl_wip_cap) {
+    pearl_wip_cap = pearl_wip_cap ? pearl_wip_cap * 2 : 64;
+    pearl_wip = (V *)realloc(pearl_wip, sizeof(V) * (size_t)pearl_wip_cap);
+    
+  }
+  pearl_wip[pearl_wip_n++] = n;
   sp = fn(sp);
-  if (sp < 1) rt_underflow(name, 1);
+  pearl_wip_n--;
+  if (sp != base + 1) {
+    long got = sp - base < 0 ? 0 : sp - base;
+    char *nb = v_to_str(n); /* rt_die never returns */
+    rt_die("`%s` is a pearl, so it has to turn each n into one answer, but at n = %s it left %ld number%s in its place",
+           name, nb, got, got == 1 ? "" : "s");
+  }
   shell_put(s, n, S[sp - 1]);
   return sp;
 }
@@ -1044,9 +1082,15 @@ static void rt_child_died(const char *msg) { /* a worker hit an error: hand its 
 #endif
 }
 
+/* every saved block carries a check of its own line and words (FNV-1a), so a damaged block runs again */
+static uint64_t save_check(uint64_t h, const char *p, size_t n) {
+  for (size_t i = 0; i < n; i++) { h ^= (unsigned char)p[i]; h *= 1099511628211ULL; }
+  return h;
+}
+#define SAVE_CHECK0 14695981039346656037ULL
 static void save_open(void) {
   FILE *f = fopen(rt_save_path, "rb");
-  char head[64]; snprintf(head, sizeof head, "trawl-save 1 %s\n", TRAWL_PROG_HASH);
+  char head[64]; snprintf(head, sizeof head, "trawl-save 2 %s\n", TRAWL_PROG_HASH);
   long good = 0;
   if (f) {
     fseek(f, 0, SEEK_END); long size = ftell(f); fseek(f, 0, SEEK_SET);
@@ -1061,8 +1105,14 @@ static void save_open(void) {
         if (!nl) break;
         *nl = 0;
         if (sscanf(all + pos, "B %ld %lld %lld %lld %lld %lld %llu%n", &no, &lo, &hi, &a, &b, &c, &len, &used) != 7) break;
+        unsigned long long check; int used2 = 0;
+        if (sscanf(all + pos + used, " %16llx%n", &check, &used2) != 1 || all[pos + used + used2]) break;
         size_t body = (size_t)(nl - all) + 1;
-        if (body + len + 1 > got || all[body + len] != '\n') break;
+        if (len > got || body + len + 1 > got || all[body + len] != '\n') break;
+        if (save_check(save_check(SAVE_CHECK0, all + pos, (size_t)used), all + body, (size_t)len) != check) {
+          fprintf(stderr, "~ note: block %ld of %s is damaged, so it and the blocks after it run again\n", saved_n + 1, rt_save_path);
+          break;
+        }
         saved = (SaveRec *)realloc(saved, sizeof(SaveRec) * (size_t)(saved_n + 1));
         SaveRec *r = &saved[saved_n++];
         r->no = no; r->lo = lo; r->hi = hi; r->a = a; r->b = b; r->count = c; r->len = (size_t)len; r->off = good;
@@ -1091,8 +1141,11 @@ static void save_forget_rest(void) { /* the run took a different path from the s
 }
 static void save_block(long no, int64_t lo, int64_t hi, int64_t a, int64_t b, int64_t c, const char *out, size_t len) {
   if (!save_fh) return;
-  fprintf(save_fh, "B %ld %lld %lld %lld %lld %lld %llu\n", no, (long long)lo, (long long)hi, (long long)a, (long long)b,
-          (long long)c, (unsigned long long)len);
+  char line[200];
+  int n = snprintf(line, sizeof line, "B %ld %lld %lld %lld %lld %lld %llu", no, (long long)lo, (long long)hi,
+                   (long long)a, (long long)b, (long long)c, (unsigned long long)len);
+  fprintf(save_fh, "%s %016llx\n", line,
+          (unsigned long long)save_check(save_check(SAVE_CHECK0, line, (size_t)n), out, len));
   fwrite(out, 1, len, save_fh); fputc('\n', save_fh); fflush(save_fh);
 }
 
@@ -1268,6 +1321,7 @@ static void gc_run(long sp) {
   for (int64_t i = 0; i < hb_cap; i++) if (hb[i].full) mark(hb[i].val);
   for (int64_t i = 0; i < echo_cap; i++) if (echoes[i].vals) for (int64_t k = 0; k < echoes[i].len; k++) mark(echoes[i].vals[k]);
   for (int w = 0; w < N_PEARL_WORDS; w++) for (int64_t i = 0; i < shells[w].cap; i++) if (shells[w].t[i].full) { mark(shells[w].t[i].key); mark(shells[w].t[i].val); }
+  for (long i = 0; i < pearl_wip_n; i++) mark(pearl_wip[i]);
   for (long i = 0; i < tape_n; i++) { mark(tape[i].lo); mark(tape[i].hi); mark(tape[i].cur); }
   mark(best_score);
   for (int64_t i = 0; i < fmemo_cap; i++) if (fmemo[i].e) mark(fmemo[i].val);
@@ -1285,7 +1339,7 @@ static void gc_run(long sp) {
 /* ------------------------------------------------------------------ program start */
 
 static void rt_reset_world(void) {
-  rt_depth = 0;
+  rt_depth = 0; pearl_wip_n = 0;
   rt_drain(); rt_hush(); wbuf_len = 0; tape_pos = 0;
   for (int i = 0; i < N_PEARL_WORDS; i++) { free(shells[i].t); shells[i].t = NULL; shells[i].cap = shells[i].n = 0; shells[i].on = 0; }
 }

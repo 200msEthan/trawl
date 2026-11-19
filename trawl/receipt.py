@@ -145,26 +145,41 @@ def run_native_teed(cmd, ticker=None, keep=True):
 
 # ---------------------------------------------------------------- save files (trawl_rt.h's format)
 
+def save_check(data):
+    """FNV-1a, the same check the native runtime writes after every saved block."""
+    h = 14695981039346656037
+    for byte in data:
+        h = ((h ^ byte) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return h
+
+
 def read_save(path):
     """The header stamp and the finished blocks of a native save file, keyed by (sweep, lo, hi, a, b)."""
     with open(path, "rb") as fh:
         data = fh.read()
     nl = data.find(b"\n")
     head = data[:nl].decode("ascii", "replace").split() if nl >= 0 else []
-    if len(head) != 3 or head[:2] != ["trawl-save", "1"]:
-        raise TrawlError(f"{path} isn't a Trawl save file")
+    if len(head) != 3 or head[:2] != ["trawl-save", "2"]:
+        raise TrawlError(f"{path} isn't a Trawl save file this Trawl can read")
     stamp, pos, recs = head[2], nl + 1, {}
     while True:
         end = data.find(b"\n", pos)
         if end < 0:
             break
-        parts = data[pos:end].split()
-        if len(parts) != 8 or parts[0] != b"B":
+        line = data[pos:end]
+        parts = line.split(b" ")
+        if len(parts) != 9 or parts[0] != b"B":
             break
-        no, lo, hi, a, b, count, length = (int(x) for x in parts[1:])
+        try:
+            no, lo, hi, a, b, count, length = (int(x) for x in parts[1:8])
+            check = int(parts[8], 16)
+        except ValueError:
+            break
         body = end + 1
-        if body + length + 1 > len(data) or data[body + length:body + length + 1] != b"\n":
+        if length < 0 or body + length + 1 > len(data) or data[body + length:body + length + 1] != b"\n":
             break
+        if save_check(line[:line.rindex(b" ")] + data[body:body + length]) != check:
+            break  # a damaged block: like the native run, trust nothing from here on
         recs[(no, lo, hi, a, b)] = (count, data[body:body + length].decode("utf-8"))
         pos = body + length + 1
     return stamp, recs
@@ -227,6 +242,8 @@ def read_receipt(path):
             r = json.load(fh)
     except (ValueError, UnicodeDecodeError):
         raise TrawlError(f"{bad} (it isn't readable JSON)") from None
+    except OSError as e:
+        raise TrawlError(f"can't open {os.path.basename(path)}: {e.strerror or e}") from None
     if not isinstance(r, dict) or type(r.get("receipt")) is not int:
         raise TrawlError(bad)
     if r["receipt"] != 1:
@@ -260,6 +277,8 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
     want = r["output"]["sha256"].lower()
     made = f"trawl {r['engine']}" + (f" --jobs {r['jobs']}" if r.get("jobs") else "")
     say(f"receipt: {main}, made {r['made']} with {made} on Trawl {r['trawl']} ({r['machine']})")
+    if r["trawl"] != __version__:
+        say(f"  note: this receipt was made on Trawl {r['trawl']}; this is Trawl {__version__}")
     if files_digest(files) != r["program"]["sha256"]:
         say("✗ the program inside the receipt was changed after it was made")
         return False
@@ -288,11 +307,14 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
                 if not r.get("save"):
                     say("✗ this receipt was made without a save file, so it can't vouch for one")
                     return False
-                if True:
+                try:
                     with open(save, "rb") as fh:
-                        if sha256(fh.read()) != r["save"]["sha256"].lower():
-                            say(f"✗ {os.path.basename(save)} is not the save file this receipt was made with")
-                            return False
+                        data = fh.read()
+                except OSError as e:
+                    raise TrawlError(f"can't open {os.path.basename(save)}: {e.strerror or e}") from None
+                if sha256(data) != r["save"]["sha256"].lower():
+                    say(f"✗ {os.path.basename(save)} is not the save file this receipt was made with")
+                    return False
                 from .cgen import to_c
                 stamp, recs = read_save(save)
                 code = to_c(prog, main_path)
@@ -340,6 +362,9 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
     elif sha256(got) == want:
         say(f"{'✓' if ok else '✗'} re-ran on {how} in {took:.1f} s: same output, "
             f"{len(got)} bytes, {lines} lines (sha256 {want[:16]})")
+        if ok and plan is not None:
+            say(f"  this was a spot check: {plan.checked} of {plan.checked + plan.replayed} saved blocks were "
+                "re-run, the rest are trusted from the save file. --sample with a bigger number checks more")
     else:
         size = (f"{len(got)} bytes, the receipt says {r['output']['bytes']}" if len(got) != r['output']['bytes']
                 else f"the same size, {len(got)} bytes, but different bytes")

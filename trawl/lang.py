@@ -248,5 +248,7 @@ def parse(src, file="<program>", search=None, used=None, flat=False):
 
 
 def suggest(name, known):
+    if name.startswith("#"):
+        return " on a line with `.\"` text, `#` isn't a comment. put the comment on its own line"
     near = difflib.get_close_matches(name, list(BUILTINS) + list(known), 1, 0.6)
     return f" did you mean `{near[0]}`?" if near else ""

@@ -184,7 +184,6 @@ def test_errors(engine, src, msg):
 
 
 @pytest.mark.parametrize("src,msg", [
-    ("1 flod", "did you mean `fold`"),
     (": dup 1 ;", "word of the sea itself"),
     ("1 [ 2", "was opened and the sea never closed it"),
     ("1 ]", "a stray `]`"),
@@ -367,6 +366,17 @@ def test_sweep_stops_cleanly_when_a_block_fails(tmp_path):
 
 
 @needs_cc
+def rewrite_block(save, head, words):
+    """A save file with its block n = 0..10 replaced by hand, carrying a correct check, as a forger would."""
+    from trawl.receipt import save_check
+    i = save.index(b"\nB 0 0 3000 0 11 ") + 1
+    j = save.index(b"\n", i)
+    old_len = int(save[i:j].split(b" ")[7])
+    line = head + b" %d" % len(words)
+    block = line + b" %016x\n" % save_check(line + words) + words + b"\n"
+    return save[:i] + block + save[j + 1 + old_len + 1:]
+
+
 def test_sweep_resumes_from_a_save_file(tmp_path):
     exe = str(tmp_path / ("sr" + (".exe" if os.name == "nt" else "")))
     build(parse(SWEEP_PROG), exe)
@@ -389,9 +399,8 @@ def test_sweep_resumes_from_a_save_file(tmp_path):
     assert r.stdout == want and "resuming" in r.stderr and "100 finished blocks" in r.stderr
     assert save.read_bytes() == text
     # finished blocks really are replayed from the file, not run again: change one block's saved words
-    old = b"B 0 0 3000 0 11 1 2\n7 \n"  # the block n = 0..10: count 1, two bytes of words
-    assert old in text
-    save.write_bytes(text.replace(old, b"B 0 0 3000 0 11 1 6\nSEVEN \n"))
+    assert b"\nB 0 0 3000 0 11 1 2 " in text  # the block n = 0..10: count 1, two bytes of words
+    save.write_bytes(rewrite_block(text, b"B 0 0 3000 0 11 1", b"SEVEN "))
     assert "SEVEN " in go().stdout
     # a different program doesn't resume from it
     exe2 = str(tmp_path / ("sr2" + (".exe" if os.name == "nt" else "")))
@@ -685,10 +694,11 @@ def test_receipt_of_a_saved_sweep_spot_checks_blocks(tmp_path):
     assert r.returncode == 0 and r.stdout == interp(SWEEP_PROG), r.stderr
     r = trawl_cli("verify", str(rec), "--save", str(save), "--sample", "5", "--seed", "1")
     assert r.returncode == 0 and "re-ran 5 saved blocks" in r.stdout and "replayed 251" in r.stdout, r.stdout + r.stderr
+    # a pass from a few blocks must say it was only a spot check, not a full re-run
+    assert "this was a spot check: 5 of 256 saved blocks" in r.stdout, r.stdout
     # a save file whose blocks were changed is not the one the receipt was made with
-    old = b"B 0 0 3000 0 11 1 2\n7 \n"
     bad = tmp_path / "bad.sav"
-    bad.write_bytes(save.read_bytes().replace(old, b"B 0 0 3000 0 11 2 2\n7 \n"))
+    bad.write_bytes(rewrite_block(save.read_bytes(), b"B 0 0 3000 0 11 2", b"7 "))
     r = trawl_cli("verify", str(rec), "--save", str(bad), "--sample", "1")
     assert r.returncode == 1 and "not the save file" in r.stdout
     # a receipt re-stamped to match the changed save file: re-running that block still catches the wrong count
@@ -1022,3 +1032,177 @@ def test_receipt_with_a_library_in_another_folder(tmp_path):
     assert trawl_cli("run", str(prog), "--receipt", str(rec)).returncode == 0
     r = trawl_cli("verify", str(rec), "--engine", "run")
     assert r.returncode == 0 and "same output" in r.stdout, r.stdout + r.stderr
+
+
+# ---- round 3 of the blind cold reads
+
+@pytest.mark.parametrize("src", [": f 1 2 ; pearl f 3 f .", ": f drop ; pearl f 9 3 f .",
+                                 ": g dup ; pearl g 2 100 power g ."])
+def test_pearl_must_turn_one_number_into_one(native, src):
+    want, got = both(native, src)
+    assert "is a pearl, so it has to turn each n into one answer" in want and got == want
+
+
+def test_pearl_that_keeps_its_shape_still_works(native):
+    want, got = both(native, ": f 1 + ; pearl f 3 f . 3 f . .pearls")
+    assert want.startswith("4 4 (1 pearls)") and got == want
+
+
+def test_step_limit_message_counts_small_limits():
+    with pytest.raises(TrawlError, match="3,000 steps and still going"):
+        interp("1 [ 1 + ]", max_steps=3000)
+    with pytest.raises(TrawlError, match="2 million steps and still going"):
+        interp("1 [ 1 + ]", max_steps=2_000_000)
+
+
+def test_hash_next_to_text_explains_itself():
+    with pytest.raises(TrawlError, match="`#` isn't a comment"):
+        interp('5 . # c ." x"')
+
+
+def test_verify_missing_files_are_plain_errors(tmp_path):
+    r = trawl_cli("verify", str(tmp_path / "nope.receipt"))
+    assert r.returncode != 0 and "can't open nope.receipt" in r.stderr and "Errno" not in r.stderr, r.stderr
+    import json
+    rec, data = _receipt(tmp_path)
+    data["save"] = {"sha256": "0" * 64}  # a receipt that does vouch for a save file
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--save", str(tmp_path / "nope.sav"), "--sample", "2")
+    assert r.returncode != 0 and "can't open nope.sav" in r.stderr and "Errno" not in r.stderr, r.stderr
+
+
+def test_verify_notes_a_different_trawl_version(tmp_path):
+    import json
+    rec, data = _receipt(tmp_path)
+    data["trawl"] = "9.9.9"
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--engine", "run")
+    assert r.returncode == 0 and "made on Trawl 9.9.9" in r.stdout, r.stdout + r.stderr
+
+
+def test_outputs_never_land_on_a_library(tmp_path):
+    lib = tmp_path / "mylib.trawl"
+    lib.write_text(": hi 1 . ;", encoding="utf-8")
+    prog = tmp_path / "m.trawl"
+    prog.write_text("use mylib hi", encoding="utf-8")
+    for args in (["run", str(prog), "--receipt", str(lib)], ["build", str(prog), "--keep-c", str(lib)],
+                 ["build", str(prog), "--keep-c", str(prog)]):
+        r = trawl_cli(*args)
+        assert r.returncode != 0 and "would write over" in r.stderr, (args, r.stderr)
+    assert lib.read_text(encoding="utf-8") == ": hi 1 . ;" and prog.read_text(encoding="utf-8") == "use mylib hi"
+
+
+def test_bad_output_names_are_refused(tmp_path):
+    prog = tmp_path / "h.trawl"
+    prog.write_text("1 .", encoding="utf-8")
+    for args, says in ((["build", str(prog), "-o", ""], "needs a file name"),
+                       (["build", str(prog), "-o", str(tmp_path)], "is a folder"),
+                       (["build", str(prog), "-o", str(tmp_path / "x"), "--keep-c", str(tmp_path / "x")], "the same file"),
+                       (["run", str(prog), "--max-steps", "0"], "above 0"),
+                       (["run", str(prog), "--max-steps", "-1"], "above 0")):
+        r = trawl_cli(*args)
+        assert r.returncode != 0 and says in r.stderr and "Traceback" not in r.stderr, (args, r.stderr)
+
+
+def test_save_never_replaces_a_file_that_isnt_a_save(native, tmp_path):
+    prog = tmp_path / "s.trawl"
+    prog.write_text(SWEEP_PROG, encoding="utf-8")
+    notes = tmp_path / "notes.txt"
+    notes.write_text("precious", encoding="utf-8")
+    r = trawl_cli("fast", str(prog), "--save", str(notes))
+    assert r.returncode != 0 and "isn't a Trawl save file" in r.stderr, r.stderr
+    assert notes.read_text(encoding="utf-8") == "precious"
+    r = trawl_cli("fast", str(prog), "--save", str(tmp_path))
+    assert r.returncode != 0 and "is a folder" in r.stderr, r.stderr
+
+
+def test_damaged_save_block_runs_again(native, tmp_path):
+    prog = tmp_path / "s.trawl"
+    prog.write_text(SWEEP_PROG, encoding="utf-8")
+    sav = tmp_path / "s.sav"
+    want = trawl_cli("fast", str(prog), "--save", str(sav)).stdout
+    data = sav.read_bytes()
+    i = data.index(b"\nB ", 200)
+    j = data.index(b"\n", i + 1)
+    parts = data[i + 1:j].split(b" ")
+    parts[6] = b"99999"  # a block's count, changed by hand
+    sav.write_bytes(data[:i + 1] + b" ".join(parts) + data[j:])
+    r = trawl_cli("fast", str(prog), "--save", str(sav))
+    assert r.stdout == want and "is damaged" in r.stderr, r.stderr
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Ctrl+C is a POSIX signal here")
+def test_ctrl_c_in_the_repl_stops_only_the_line():
+    import signal
+    import time
+    p = subprocess.Popen([sys.executable, "-m", "trawl", "repl"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, encoding="utf-8", cwd=ROOT)
+    p.stdin.write(": l 1 [ 1 ] ; 5 l\n")
+    p.stdin.flush()
+    time.sleep(1.5)
+    p.send_signal(signal.SIGINT)
+    time.sleep(0.5)
+    out, _ = p.communicate("7 .\n", timeout=60)
+    assert "stopped (Ctrl+C)" in out and "7   []" in out and "\033[" not in out, out
+
+
+# the engine fuzzer's finds: each program must print the same thing, or stop with the same error, on both
+FUZZ = [
+    ": w dup . : w drop 0 ; ;  0 4 sweep w .",  # a swept word defines itself again partway through
+    ": f 1 dig 0 = if 1 1 bury dup f drop 100 + else 7 + then ; pearl f 5 f . 5 f . .pearls",  # pearl set twice
+    ": f drop 700 [ 2 1000000 power drop 1 - ] drop 7 ; pearl f 10 30 power f . 10 30 power f . .pearls",  # GC
+    ": x drop 0 ; : [x] 99 . ; : f [ x ] ; 1 f . : f [x] ;  f",  # `[ x ]` is not the word `[x]`
+    ": g zzz ;\ng\n: g zzz ;\n: zzz 1 ;",  # the error names the line of the definition that ran
+    "zzq  : zzq 1 ;  : zzqq 2 ;",  # "did you mean" only names words that exist yet
+    ": zzqq 1 ; 1 . zzq",
+    "1 . zzz 2 .",  # a word defined nowhere: what came before is still printed
+    "1 . flod",  # (the native build used to refuse it before running, printing nothing)
+    "2 100000000000 power .",
+    "-3 10000000000000 power .",
+    "0 100000000000 echo .",
+]
+
+
+@pytest.mark.parametrize("src", FUZZ)
+def test_fuzzer_finds_agree(native, src):
+    want, got = both(native, src)
+    assert got == want
+
+
+def test_fuzzer_finds_say_what_the_interpreter_says():
+    assert interp(FUZZ[0]) == "0 0 \n"
+    assert interp(FUZZ[1]) == "105 105 (1 pearls) \n"
+    with pytest.raises(TrawlError, match="power is too big"):
+        interp(FUZZ[8])
+    with pytest.raises(TrawlError, match="echo can look at 16777216 seabed cells at most"):
+        interp(FUZZ[10])
+
+
+def test_running_out_of_memory_is_a_plain_error(monkeypatch):
+    import trawl.interp as ti
+
+    def greedy(self, prog):
+        raise MemoryError
+    monkeypatch.setattr(ti.Sea, "run", greedy)
+    with pytest.raises(TrawlError, match="the sea ran out of memory"):
+        interp("1 .")
+
+
+def test_factorings_with_many_equal_exponents_is_exact(native):
+    primes, n = [], 2
+    while len(primes) < 66:
+        if all(n % p for p in primes):
+            primes.append(n)
+        n += 1
+    row, bell = [1], [1]  # Bell numbers: a product of k different primes has Bell(k) factorings
+    for _ in range(66):
+        nxt = [row[-1]]
+        for x in row:
+            nxt.append(nxt[-1] + x)
+        row = nxt
+        bell.append(row[0])
+    for k in (62, 63, 66):
+        prod = 1
+        for p in primes[:k]:
+            prod *= p
+        assert native(f"{prod} factorings .") == f"{bell[k]} \n", k
