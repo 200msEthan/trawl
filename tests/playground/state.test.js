@@ -223,6 +223,10 @@ async function consistent(p, id, label, fingerprint) {
   await c.evaluate(() => { finishLine(); addCatch("7 " + "8 ".repeat(50000)); });
   const card = await c.$eval("#catches .catch", (li) => ({ len: li.textContent.length, h: li.getBoundingClientRect().height }));
   expect(card.len < 800 && card.h < 300, `a giant line makes a small card (${JSON.stringify(card)})`);
+  // a long program still makes a share link (spreading 130,000 bytes into one call used to overflow the stack)
+  await c.$eval("#code", (t) => { t.value = "# " + "x".repeat(130000); });
+  await c.click("#share"); await c.waitForTimeout(300);
+  expect((await c.evaluate(() => location.hash.length)) > 170000, "a 130,000-byte program gets a share link");
   // the Sound button says what it is set to, before and after a run
   expect(/^Sound (on|off)$/.test(await c.$eval("#sound", (b) => b.textContent)), "Sound button says on or off");
 

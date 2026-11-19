@@ -99,7 +99,7 @@ class Program:
     defs: list = field(default_factory=list)  # every Def, in the order they appear
 
 
-NUMBER = re.compile(r"[+-]?\d+(?:_\d+)*\Z")
+NUMBER = re.compile(r"[+-]?\d+(?:_\d+)*\Z", re.ASCII)  # 0-9 only, as the spec says
 
 
 def tokens(src, file="<program>"):
@@ -247,8 +247,23 @@ def parse(src, file="<program>", search=None, used=None, flat=False):
     return Program(body, p.defs)
 
 
-def suggest(name, known):
+def shown(name):
+    """A word as an error message shows it: invisible characters (a NUL, an escape) written as \\xNN."""
+    return "".join(f"\\x{ord(c):02x}" if ord(c) < 32 or ord(c) == 127 else c for c in name)
+
+
+def special_hint(name):
+    """A hint for a word that isn't a misspelling: a `#` that isn't a comment, or a number that isn't whole."""
     if name.startswith("#"):
         return " on a line with `.\"` text, `#` isn't a comment. put the comment on its own line"
+    if re.fullmatch(r"[+-]?(\d[\d_]*)?\.\d+|[+-]?\d[\d_]*\.\d*|[+-]?\d[\d_]*(\.\d*)?[eE][+-]?\d+", name):
+        return " Trawl's numbers are all whole: no decimal points or exponents"
+    return None
+
+
+def suggest(name, known):
+    hint = special_hint(name)
+    if hint:
+        return hint
     near = difflib.get_close_matches(name, list(BUILTINS) + list(known), 1, 0.6)
     return f" did you mean `{near[0]}`?" if near else ""

@@ -9,11 +9,13 @@
 : copy dup 2000 + dig swap 1000 + bury ;
 : year 1 [ dup grow 1 + dup n > if drop 0 then ] drop
        1 [ dup copy 1 + dup n > if drop 0 then ] drop ;
-: show 1 [ dup cell 46 35 rot 1 = if swap then drop emit 1 + dup n > if drop 0 then ] drop 10 emit ;
+# each spot is 0, 1 or 2, drawn as . o #
+: glyph dup 0 = if drop 46 else 1 = if 111 else 35 then then ;
+: show 1 [ dup cell glyph emit 1 + dup n > if drop 0 then ] drop 10 emit ;
 
 1 7 1000 + bury
 0 -1 bury
 # year by year, until echo hears a picture it has heard before
 1001 1013 echo drop
 1 [ drop show year -1 dig 1 + -1 bury 1001 1013 echo dup 0 = ] drop
-." the reef repeats every " . ." years, first seen again after " -1 dig . ." years" 
+." the reef repeats every " dup . ." years: year " -1 dig dup . ." looks just like year " swap - . 

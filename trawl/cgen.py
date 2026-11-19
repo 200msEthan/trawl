@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 from .lang import (Def, If, Loop, Num, PearlDecl, Program, Sweep, Text, TrawlError, WANTS, Word,
-                   BUILTINS, YOURS_WINS, suggest, where)
+                   BUILTINS, YOURS_WINS, shown, special_hint, suggest, where)
 
 RUNTIME = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime")
 SMALL_MIN, SMALL_MAX = -(1 << 62), (1 << 62) - 1
@@ -317,8 +317,16 @@ class Gen:
                         self.sure.add(node.name)
                 f.emit(f"{self.state(node.name)} = {self.def_index[id(node)]};")
             elif k is PearlDecl:
-                pid = self.pearl_ids.setdefault(node.name, len(self.pearl_ids))
-                f.emit(f"shells[{pid}].on = 1;")
+                msg = c_string(f"{where(node.tok)}: `pearl {shown(node.name)}`: nobody in the sea knows the word `{shown(node.name)}` yet")
+                if node.name not in self.by_name:
+                    f.flush()
+                    f.emit(f'rt_die("%s", {msg});')
+                else:
+                    if node.name not in self.sure:
+                        f.flush()
+                        f.emit(f'if ({self.state(node.name)} < 0) rt_die("%s", {msg});')
+                    pid = self.pearl_ids.setdefault(node.name, len(self.pearl_ids))
+                    f.emit(f"shells[{pid}].on = 1;")
             elif k is If or k is Loop:
                 self.cond += 1  # a definition in here may or may not run
                 try:
@@ -437,7 +445,7 @@ class Gen:
     def sweep(self, f, node, at, top_level):
         t = node.name
         f.flush()
-        msg = f"{where(node.tok)}: nobody in the sea knows the word `{t}` yet, so `sweep` can't run it."
+        msg = f"{where(node.tok)}: nobody in the sea knows the word `{shown(t)}` yet, so `sweep` can't run it."
         if t not in self.by_name:
             f.emit(f"if (sp < 2) rt_underflow(\"sweep\", 2);")
             f.emit(f"rt_die(\"%s\", {c_string(msg)});")
@@ -478,14 +486,14 @@ class Gen:
 
     def unknown(self, node, extra=""):
         t = node.name
-        return f"{where(node.tok)}: nobody in the sea knows the word `{t}`{extra}"
+        return f"{where(node.tok)}: nobody in the sea knows the word `{shown(t)}`{extra}"
 
     def die_unknown(self, node):
         """C that stops with the interpreter's message, whose "did you mean" names only a builtin or a word
         defined at the moment of the call: the best match among those is picked when the call happens."""
         import difflib
         t = node.name
-        if t.startswith("#"):  # the hint about comments, not a near name
+        if special_hint(t):  # a hint about comments or whole numbers, not a near name
             return f'rt_die("%s", {c_string(self.unknown(node, "." + suggest(t, ())))});'
         ranked = difflib.get_close_matches(t, list(BUILTINS) + sorted(set(self.by_name) - {t}), 1 << 20, 0.6)
         code = []
@@ -734,7 +742,7 @@ def build(prog, out_path, file="<program>", opt="-O2", keep_c=None):
         c_path = keep_c or os.path.join(tmp, "prog.c")
         with open(c_path, "w", encoding="utf-8") as fh:
             fh.write(code)
-        cmd = [cc, opt, "-std=gnu99", "-w", "-I", RUNTIME, "-o", out_path, c_path]
+        cmd = [cc, opt, "-std=gnu99", "-w", "-I", RUNTIME, "-o", out_path, "-x", "c", c_path, "-x", "none"]  # C whatever its name
         if os.name == "nt":  # Windows gives a program 1 MB of stack unless asked: ask for 256 MB
             cmd.append("-Wl,--stack,268435456")
         elif sys.platform == "darwin":

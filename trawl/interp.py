@@ -13,7 +13,7 @@ if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)  # Trawl numbers can have any number of digits
 
 from .lang import (Def, If, Loop, Num, PearlDecl, Program, Sweep, Text, TrawlError, WANTS, Word,
-                   parse, suggest)
+                   parse, shown, suggest)
 
 
 def _steps(n):
@@ -97,6 +97,8 @@ class Sea:
                 self.words[node.name] = node.body
                 self.defined += 1
             elif k is PearlDecl:
+                if node.name not in self.words:
+                    raise TrawlError(f"{_where(node)}`pearl {shown(node.name)}`: nobody in the sea knows the word `{shown(node.name)}` yet")
                 self.pearls.setdefault(node.name, {})
                 self.defined += 1
             elif k is Sweep:
@@ -124,7 +126,7 @@ class Sea:
         name, st = node.name, self.stack
         hi, lo = self.pop("sweep", 2), self.pop("sweep", 2)
         if name not in self.words:
-            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{name}` yet, so `sweep` can't run it.")
+            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{shown(name)}` yet, so `sweep` can't run it.")
         check_sweep_range(lo, hi)
         call = Word(name, node.tok)
 
@@ -278,7 +280,7 @@ class Sea:
         elif t == "worlds":
             st.append(self.sunk)
         else:
-            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{t}`.{suggest(t, self.words)}")
+            raise TrawlError(f"{_where(node)}nobody in the sea knows the word `{shown(t)}`.{suggest(t, self.words)}")
 
 
 

@@ -800,7 +800,11 @@ pick.addEventListener("change", () => {
   else if (ready) runProgram();
   else { resetView(); if (!firstRun) pendingRun = true; } // still loading or restarting: it runs as soon as the hunter is back
 });
-function encode(s) { return btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function encode(s) { // in slices: spreading a long program's bytes into one call overflows the stack
+  const bytes = new TextEncoder().encode(s); let bin = "";
+  for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
 function decode(s) { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/")); return new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))); }
 $("share").addEventListener("click", async () => {
   const url = location.href.split("#")[0] + "#code=" + encode(code.value);

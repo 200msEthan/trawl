@@ -63,6 +63,31 @@ def check_save(path):
                                  "it. pick a new file name")
 
 
+EXE_MAGIC = (b"\x7fELF", b"MZ", b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe")
+
+
+def check_kind(path, flag, ok, what):
+    """An output may replace an earlier output of the same kind (or nothing), never anything else."""
+    if path and os.path.isfile(path) and os.path.getsize(path):
+        with open(path, "rb") as fh:
+            head = fh.read(64)
+        if not ok(head):
+            raise TrawlError(f"`{flag} {path}`: that file isn't {what}, and this would write over it. "
+                             "pick a new file name")
+
+
+def check_receipt(path):
+    check_kind(path, "--receipt", lambda h: h.lstrip(b"\xef\xbb\xbf \t\r\n").startswith(b"{"), "a Trawl receipt")
+
+
+def check_exe(path, flag="-o"):
+    check_kind(path, flag, lambda h: h.startswith(EXE_MAGIC), "a program Trawl built")
+
+
+def check_c(path):
+    check_kind(path, "--keep-c", lambda h: h.startswith(b"/* made by the Trawl compiler"), "C that Trawl wrote")
+
+
 def check_steps(n):
     if n < 1:
         raise TrawlError(f"--max-steps needs a number of steps above 0, not {n}")
@@ -78,6 +103,7 @@ def cmd_run(args):
     from .progress import Ticker
     check_steps(args.max_steps)
     check_output(args.receipt, program_paths(args.file), "--receipt")
+    check_receipt(args.receipt)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # the same bytes the native build writes, on any console
     if args.receipt:
@@ -123,10 +149,17 @@ def cmd_build(args):
     from .cgen import build
     if args.output == "":
         raise TrawlError("`-o` needs a file name")
+    if os.path.isdir(args.file):
+        raise TrawlError(f"{args.file} is a folder, not a Trawl program")
     out = args.output or exe_name(args.file)
     paths = program_paths(args.file)
+    if args.output is None and os.path.abspath(out) == os.path.abspath(args.file):
+        raise TrawlError(f"the program built from {args.file} would be called {out}, the same name. "
+                         "pick a name for it with -o")
     check_output(out, paths, "-o")
+    check_exe(out)
     check_output(args.keep_c, paths, "--keep-c")
+    check_c(args.keep_c)
     if args.keep_c is not None and os.path.abspath(args.keep_c) == os.path.abspath(out):
         raise TrawlError("`-o` and `--keep-c` name the same file. give the C file its own name")
     prog = load(args.file)
@@ -140,6 +173,9 @@ def cmd_fast(args):
     check_output(args.receipt, paths, "--receipt")
     check_output(args.save, paths, "--save")
     check_save(args.save)
+    check_receipt(args.receipt)
+    if args.save and args.receipt and os.path.abspath(args.save) == os.path.abspath(args.receipt):
+        raise TrawlError("`--save` and `--receipt` name the same file. give each its own name")
     if args.receipt:
         from .receipt import program_files
         prog, files, main = program_files(args.file)
@@ -255,6 +291,9 @@ def main(argv=None):
     c.add_argument("file"); c.set_defaults(fn=cmd_c)
     q = sub.add_parser("repl", help="interactive sea")
     q.set_defaults(fn=cmd_repl)
+    for name in ("stdout", "stderr"):  # started with that stream closed (`trawl run x >&-`): write nowhere
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
     args = p.parse_args(argv)
     if not args.cmd:
         if not sys.stdin.isatty():

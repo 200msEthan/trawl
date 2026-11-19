@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <setjmp.h>
+#include <errno.h>
 #include "trawl_big.h"
 #ifndef _WIN32
 #include <unistd.h>
@@ -1378,6 +1379,10 @@ static void rt_args(int argc, char **argv) {
   }
 }
 
+static int rt_finish(void) { /* the output really went somewhere (a full disk is an error, not a quiet loss) */
+  if (fflush(stdout) != 0 || ferror(stdout)) { fprintf(stderr, "~ can't write the output: %s\n", strerror(errno)); return 1; }
+  return 0;
+}
 static int rt_main(int argc, char **argv) {
   static char obuf[1 << 16];
   setvbuf(stdout, obuf, _IOFBF, sizeof obuf);
@@ -1389,7 +1394,7 @@ static int rt_main(int argc, char **argv) {
     trawl_main(0);
     rt_out("\n", 1);
     rt_flush();
-    return 0;
+    return rt_finish();
   }
   char *kept = NULL; size_t kept_len = 0; char *best = NULL; size_t best_len = 0; int has_best = 0, has_kept = 0; /* a kept world may print nothing */
   for (;;) {
@@ -1398,7 +1403,7 @@ static int rt_main(int argc, char **argv) {
       trawl_main(0);
       fwrite(kept, 1, kept_len, stdout); fwrite(wbuf, 1, wbuf_len, stdout);
       printf("\n(%ld worlds sank along the way)\n", sunk);
-      return 0;
+      return rt_finish();
     }
     if (sink_kind == 1) { has_kept = 1; kept = (char *)realloc(kept, kept_len + wbuf_len + 1); memcpy(kept + kept_len, wbuf, wbuf_len); kept_len += wbuf_len; }
     else if (sink_kind == 2 && (!has_best || v_cmp(sink_score, best_score) < 0)) {
@@ -1411,7 +1416,7 @@ static int rt_main(int argc, char **argv) {
       if (has_best || has_kept) {
         fwrite(kept, 1, kept_len, stdout); if (has_best) fwrite(best, 1, best_len, stdout);
         printf("\n(%ld worlds sank along the way)\n", sunk);
-        return 0;
+        return rt_finish();
       }
       rt_die("every world sank (%ld of them). the sea has no answer.", sunk);
     }

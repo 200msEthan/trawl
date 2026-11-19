@@ -296,7 +296,12 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
             with open(os.path.join(tmp, name), "w", encoding="utf-8") as fh:
                 fh.write(text)
         main_path = os.path.join(tmp, main)
-        prog = parse(files[main], main_path, flat=True)
+        used = []
+        prog = parse(files[main], main_path, flat=True, used=used)
+        for u in used:  # every library must come from the receipt, never from this machine
+            if os.path.normcase(os.path.dirname(os.path.realpath(u))) != os.path.normcase(os.path.realpath(tmp)):
+                say(f"✗ the receipt leaves out the library {os.path.basename(u)}, so it can't vouch for the program")
+                return False
         t0 = time.time()
         plan = None
         if engine == "run":
@@ -360,7 +365,9 @@ def verify(path, engine=None, save=None, sample=0, max_steps=50_000_000, seed=No
             "first lines were changed after it was made")
         ok = False
     elif sha256(got) == want:
-        say(f"{'✓' if ok else '✗'} re-ran on {how} in {took:.1f} s: same output, "
+        spot = (f", SPOT CHECK: {plan.checked} of {plan.checked + plan.replayed} blocks re-run"
+                if plan is not None else "")
+        say(f"{'✓' if ok else '✗'} re-ran on {how} in {took:.1f} s: same output{spot}, "
             f"{len(got)} bytes, {lines} lines (sha256 {want[:16]})")
         if ok and plan is not None:
             say(f"  this was a spot check: {plan.checked} of {plan.checked + plan.replayed} saved blocks were "

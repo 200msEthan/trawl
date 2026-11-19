@@ -696,6 +696,7 @@ def test_receipt_of_a_saved_sweep_spot_checks_blocks(tmp_path):
     assert r.returncode == 0 and "re-ran 5 saved blocks" in r.stdout and "replayed 251" in r.stdout, r.stdout + r.stderr
     # a pass from a few blocks must say it was only a spot check, not a full re-run
     assert "this was a spot check: 5 of 256 saved blocks" in r.stdout, r.stdout
+    assert "same output, SPOT CHECK: 5 of 256 blocks re-run" in r.stdout, r.stdout  # on the ✓ line itself
     # a save file whose blocks were changed is not the one the receipt was made with
     bad = tmp_path / "bad.sav"
     bad.write_bytes(rewrite_block(save.read_bytes(), b"B 0 0 3000 0 11 2", b"7 "))
@@ -1208,3 +1209,83 @@ def test_factorings_with_many_equal_exponents_is_exact(native):
         for p in primes[:k]:
             prod *= p
         assert native(f"{prod} factorings .") == f"{bell[k]} \n", k
+
+
+# ---- round 4 of the blind cold reads
+
+@pytest.mark.parametrize("src", ["1 . pearl nothing 2 .", "1 . pearl f : f 1 + ; 2 .", "3.5 .", "1 . 1e3 ."])
+def test_round4_errors_agree(native, src):
+    want, got = both(native, src)
+    assert "~ " in want and got == want
+
+
+def test_pearl_needs_a_word_that_exists():
+    with pytest.raises(TrawlError, match="`pearl nothing`: nobody in the sea knows the word `nothing` yet"):
+        interp("pearl nothing")
+    assert interp(": g pearl f ; : f 1 + ; g 4 f .") == "5 \n"  # defined by the time the pearl line runs
+
+
+def test_decimal_numbers_get_a_whole_number_hint():
+    with pytest.raises(TrawlError, match="numbers are all whole"):
+        interp("3.5 .")
+
+
+def test_receipt_cant_borrow_a_library_from_this_machine(tmp_path):
+    import json
+    from trawl.receipt import files_digest
+    prog = tmp_path / "p.trawl"
+    prog.write_text("use stdlib 10 fib .", encoding="utf-8")
+    rec = tmp_path / "p.receipt"
+    assert trawl_cli("run", str(prog), "--receipt", str(rec)).returncode == 0
+    data = json.loads(rec.read_text(encoding="utf-8"))
+    data["program"]["files"] = {k: v for k, v in data["program"]["files"].items() if k == "p.trawl"}
+    data["program"]["sha256"] = files_digest(data["program"]["files"])
+    rec.write_text(json.dumps(data), encoding="utf-8")
+    r = trawl_cli("verify", str(rec), "--engine", "run")
+    assert r.returncode == 1 and "leaves out the library stdlib" in r.stdout, r.stdout + r.stderr
+
+
+def test_outputs_only_replace_their_own_kind(native, tmp_path):
+    prog = tmp_path / "s.trawl"
+    prog.write_text("1 .", encoding="utf-8")
+    notes = tmp_path / "notes.txt"
+    notes.write_text("precious", encoding="utf-8")
+    for args, says in ((["run", str(prog), "--receipt", str(notes)], "isn't a Trawl receipt"),
+                       (["build", str(prog), "-o", str(notes)], "isn't a program Trawl built"),
+                       (["build", str(prog), "--keep-c", str(notes)], "isn't C that Trawl wrote"),
+                       (["fast", str(prog), "--save", str(tmp_path / "q"), "--receipt", str(tmp_path / "q")],
+                        "name the same file")):
+        r = trawl_cli(*args)
+        assert r.returncode != 0 and says in r.stderr, (args, r.stderr)
+    assert notes.read_text(encoding="utf-8") == "precious"
+    # but a build, its C and a receipt can each be made again in the same place
+    exe, kc, rec = tmp_path / "s1", tmp_path / "kc", tmp_path / "s.receipt"
+    for _ in range(2):
+        r = trawl_cli("build", str(prog), "-o", str(exe), "--keep-c", str(kc))  # kc has no .c ending: still C
+        assert r.returncode == 0, r.stderr
+        assert trawl_cli("run", str(prog), "--receipt", str(rec)).returncode == 0
+
+
+def test_build_names_its_own_output_plainly(tmp_path):
+    noext = tmp_path / "noext"
+    noext.write_text("1 .", encoding="utf-8")
+    r = trawl_cli("build", str(noext))
+    assert r.returncode != 0 and "pick a name for it with -o" in r.stderr and "`-o" not in r.stderr, r.stderr
+    r = trawl_cli("build", str(tmp_path))
+    assert r.returncode != 0 and "is a folder, not a Trawl program" in r.stderr, r.stderr
+
+
+@pytest.mark.skipif(not os.path.exists("/dev/full"), reason="needs /dev/full")
+def test_native_run_says_when_its_output_is_lost(native, tmp_path):
+    prog = tmp_path / "s.trawl"
+    prog.write_text("1 .", encoding="utf-8")
+    with open("/dev/full", "w") as full:
+        r = subprocess.run([sys.executable, "-m", "trawl", "fast", str(prog)], stdout=full, stderr=subprocess.PIPE,
+                           text=True, cwd=ROOT)
+    assert r.returncode != 0 and "can't write the output" in r.stderr, r.stderr
+
+
+@pytest.mark.parametrize("src", ["\x00 .", "١٢٣ ."])
+def test_odd_characters_in_words(native, src):
+    want, got = both(native, src)
+    assert want.startswith("~") and "\x00" not in want and got == want  # 0-9 only are digits; a NUL is shown as \x00
