@@ -186,9 +186,15 @@ class Parser:
                 body.append(PearlDecl(self.toks[self.i].text, t))
                 self.i += 1
             elif s == "sweep":
-                if self.i >= len(self.toks) or self.toks[self.i].text in BUILTINS or NUMBER.match(self.toks[self.i].text):
+                name = self.toks[self.i].text if self.i < len(self.toks) else None
+                if name is None or NUMBER.match(name):
                     raise TrawlError(f"{where(t)}: `sweep` needs the name of one of your words after it, like `1 1000 sweep good?`")
-                body.append(Sweep(self.toks[self.i].text, t))
+                if name in BUILTINS:
+                    raise TrawlError(
+                        f"{where(t)}: `sweep` takes one of your own words, and `{name}` is built in. "
+                        f"Wrap it first: `: {name}? {name} ;` then `1 1000 sweep {name}?`."
+                    )
+                body.append(Sweep(name, t))
                 self.i += 1
             elif s in ("]", "else", "then", ";"):
                 raise TrawlError(f"{where(t)}: a stray `{s}` with nothing open for it to close")
