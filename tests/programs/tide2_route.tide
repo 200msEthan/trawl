@@ -1,4 +1,4 @@
-# Claude #2: the lantern-keeper's round. Five made-up harbour towns, A to E.
+# Claude #2: the lantern-keeper's round. Five made-up harbor towns, A to E.
 # Leave A, light every other town's lantern once, come home. Which order is shortest?
 # Riptide guesses every order; `aim` keeps the shortest one.
 use stdlib

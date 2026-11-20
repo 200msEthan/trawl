@@ -1,5 +1,5 @@
 # Claude #2b: 2D BATHTUBS on a doughnut of R rows (600) x C columns (601). Each tub pours 1/k (705) of its
-# water, rounded down, to each of its 4 neighbours, all at once. Cells are numbered 1..R*C at 1000+.
+# water, rounded down, to each of its 4 neighbors, all at once. Cells are numbered 1..R*C at 1000+.
 use stdlib
 : R 600 dig ;
 : C 601 dig ;

@@ -10,7 +10,7 @@
 : each-grow 1 [ dup grow 1 + dup n > if drop 0 then ] drop ;
 : each-shift 1 [ dup shift 1 + dup n > if drop 0 then ] drop ;
 : wipe 1 [ 0 over 1000 + bury 0 over 3000 + bury 1 + dup n 2 * > if drop 0 then ] drop ;
-# count: how many spots have coral, and the pair test: spot i and its right neighbour both young
+# count: how many spots have coral, and the pair test: spot i and its right neighbor both young
 : count 0 1 [ dup c if swap 1 + swap then 1 + dup n > if drop 0 then ] drop ;
 : pair? 0 1 [ dup c 1 = over right c 1 = * if swap drop 1 swap then 1 + dup n > if drop 0 then ] drop ;
 : lens? count 2 = if pair? else 0 then ;

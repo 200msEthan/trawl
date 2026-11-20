@@ -37,7 +37,7 @@ the first number with a property).
    this before, and how many looks ago?", which is the loop length of whatever system the
    program is simulating. In other languages this is a library routine you write yourself.
 3. **Worlds with a built-in "best".** `wave`/`want`/`more` are classic backtracking, but
-   `aim` (keep the lowest-scoring world) makes small optimisation searches one word long,
+   `aim` (keep the lowest-scoring world) makes small optimization searches one word long,
    and each world replays from a clean sea, so the seabed and echo just work inside a search.
 4. **Digit arithmetic in any base as core words.** `digsum` and `altsum` (the alternating
    digit sum, which matches x mod (base+1)) are part of the language, because the research
