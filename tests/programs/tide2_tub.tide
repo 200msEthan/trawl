@@ -1,5 +1,5 @@
 # Claude #2b: THE BATHTUBS. A ring of n tubs (600) of whole cups of water. Every turn, all at once, each tub
-# pours a third of its water (rounded down) into EACH neighbour and keeps the rest. Water is never lost.
+# pours a third of its water (rounded down) into EACH neighbor and keeps the rest. Water is never lost.
 use stdlib
 : n 600 dig ;
 : w 1000 + dig ;

@@ -24,7 +24,7 @@ Both counts match a separate Python check using Legendre's formula.
 
 ## What is known and what is not
 
-- **k = 3 (and so k = 2).** Johan Land posted a proof, with a Lean formalisation, that his
+- **k = 3 (and so k = 2).** Johan Land posted a proof, with a Lean formalization, that his
   family gives infinitely many n ([github.com/beetree/math_erdos_727](https://github.com/beetree/math_erdos_727)).
   It has not been reviewed yet, and the problem is still listed as open.
 - **k = 4.** Nothing is known. The family n = 8t^4 - 18t^2 + 6, found by a research Claude

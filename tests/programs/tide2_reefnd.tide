@@ -1,6 +1,6 @@
 # Claude #2: reefs in ANY number of dimensions. A sea of side L in D dimensions, wrapping round
 # every way (a ring, a doughnut, a 3D doughnut, ...). Rule M2: each spot becomes the sum of its
-# 2 x D neighbours + (itself x last year), remainder after 3. Spots k = 0 .. L^D - 1.
+# 2 x D neighbors + (itself x last year), remainder after 3. Spots k = 0 .. L^D - 1.
 : L 600 dig ;
 : D 601 dig ;
 : pw 1 swap [ swap L * swap 1 - ] drop ;

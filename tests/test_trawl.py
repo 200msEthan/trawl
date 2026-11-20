@@ -686,7 +686,7 @@ def test_receipt_from_the_interpreter_verifies(tmp_path):
     rec.write_text(json.dumps(data), encoding="utf-8")
     r = trawl_cli("verify", str(rec), "--engine", "run")
     assert r.returncode == 1 and "the output is different" in r.stdout and "line 1" in r.stdout, r.stdout
-    # and so does one whose program was edited afterwards
+    # and so does one whose program was edited afterward
     data["program"]["files"]["fibs.trawl"] = data["program"]["files"]["fibs.trawl"].replace("20", "21")
     rec.write_text(json.dumps(data), encoding="utf-8")
     r = trawl_cli("verify", str(rec), "--engine", "run")
