@@ -187,13 +187,13 @@ class Parser:
                 self.i += 1
             elif s == "sweep":
                 name = self.toks[self.i].text if self.i < len(self.toks) else None
-                if name is None or NUMBER.match(name):
-                    raise TrawlError(f"{where(t)}: `sweep` needs the name of one of your words after it, like `1 1000 sweep good?`")
-                if name in BUILTINS:
+                if name in ("prime", "spf", "factorings"):
                     raise TrawlError(
                         f"{where(t)}: `sweep` takes one of your own words, and `{name}` is built in. "
-                        f"Wrap it first: `: {name}? {name} ;` then `1 1000 sweep {name}?`."
+                        f"Wrap it first: `: {name}? {name} ;` then use `sweep {name}?` with your bounds."
                     )
+                if name is None or name in BUILTINS or NUMBER.match(name):
+                    raise TrawlError(f"{where(t)}: `sweep` needs the name of one of your words after it, like `1 1000 sweep good?`")
                 body.append(Sweep(name, t))
                 self.i += 1
             elif s in ("]", "else", "then", ";"):
