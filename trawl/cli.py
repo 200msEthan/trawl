@@ -22,8 +22,21 @@ if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)  # numbers of any size, also in the compiler's constants
 
 
+def folder_error(path):
+    return TrawlError(f"{path} is a folder, not a Trawl program: name one .trawl file in it")
+
+
 def load(path):
-    return parse(read_source(path), path)
+    """Read and parse the program at path. A file that can't be read gets a plain message, not Python's."""
+    if os.path.isdir(path):
+        raise folder_error(path)
+    try:
+        src = read_source(path)
+    except FileNotFoundError:
+        raise TrawlError(f"can't open {path}: there's no file by that name") from None
+    except OSError as e:
+        raise TrawlError(f"can't open {path}: {e.strerror or e}") from None
+    return parse(src, path)
 
 
 def program_paths(source):
@@ -180,7 +193,7 @@ def cmd_build(args):
     if args.output == "":
         raise TrawlError("`-o` needs a file name")
     if os.path.isdir(args.file):
-        raise TrawlError(f"{args.file} is a folder, not a Trawl program")
+        raise folder_error(args.file)
     out = args.output or exe_name(args.file)
     paths = program_paths(args.file)
     if args.output is None and os.path.abspath(out) == os.path.abspath(args.file):
