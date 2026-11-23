@@ -1105,6 +1105,21 @@ def test_verify_missing_files_are_plain_errors(tmp_path):
     assert r.returncode != 0 and "can't open nope.sav" in r.stderr and "Errno" not in r.stderr, r.stderr
 
 
+@pytest.mark.parametrize("cmd", ["run", "fast", "build", "c"])
+def test_missing_program_is_a_plain_error(tmp_path, cmd):
+    r = trawl_cli(cmd, str(tmp_path / "nope.trawl"))
+    assert r.returncode != 0 and r.stderr.startswith("~ can't open ") and "nope.trawl" in r.stderr, r.stderr
+    assert "there's no file by that name" in r.stderr and "Errno" not in r.stderr, r.stderr
+
+
+@pytest.mark.parametrize("cmd", ["run", "fast", "build", "c"])
+def test_folder_as_program_is_a_plain_error(tmp_path, cmd):
+    r = trawl_cli(cmd, str(tmp_path))
+    assert r.returncode != 0 and r.stderr.startswith("~ ") and "Errno" not in r.stderr, r.stderr
+    assert "is a folder, not a Trawl program: name one .trawl file in it" in r.stderr, r.stderr
+    assert not r.stdout, r.stdout
+
+
 def test_verify_notes_a_different_trawl_version(tmp_path):
     import json
     rec, data = _receipt(tmp_path)
